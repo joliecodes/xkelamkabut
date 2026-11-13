@@ -195,3 +195,5 @@ form input.invalid{border-color:#d9534f;box-shadow:0 0 0 3px rgba(217,83,79,.15)
 .lane .item.short .flags{margin-left:auto}
 .dayhead .round{width:36px;height:36px;padding:0;background:#f1efea;color:var(--ink)}
 .dayhead .round .ico{width:16px;height:16px}
+.days button em{display:block;font-style:normal;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;opacity:.75;margin-top:1px}
+.dayhead .round{margin-top:3px}

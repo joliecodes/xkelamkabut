@@ -1,5 +1,5 @@
 // Network-first while building: always try fresh files, fall back to cache when offline.
-const CACHE = 'xkk-v10';
+const CACHE = 'xkk-v11';
 const ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.json', 'icons/icon.svg'];
 
 self.addEventListener('install', e => {

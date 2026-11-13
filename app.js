@@ -80,7 +80,8 @@
     return `${h}:${String(m).padStart(2, '0')} ${ap}`;
   };
   const fmtHour = h => `${h % 12 || 12} ${h < 12 || h === 24 ? 'am' : 'pm'}`;
-  const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const localISO = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return localISO(d); };
   const todayISO = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const toast = msg => { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 1500); };
@@ -103,7 +104,9 @@
     trip.days.forEach((d, i) => {
       const b = document.createElement('button');
       b.className = i === cur ? 'on' : '';
-      b.innerHTML = `<b>Day ${i + 1}</b><span>${d.date ? fmtDate(d.date, { weekday: 'short', day: 'numeric' }) : '—'}</span>`;
+      b.innerHTML = d.date
+        ? `<b>Day ${i + 1}</b><span>${fmtDate(d.date, { weekday: 'short' })}</span><em>${fmtDate(d.date, { month: 'short' })} ${fmtDate(d.date, { day: 'numeric' })}</em>`
+        : `<b>Day ${i + 1}</b><span>—</span>`;
       b.onclick = () => changeDay(i);
       wrap.appendChild(b);
     });
