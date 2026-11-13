@@ -229,7 +229,7 @@
     el.innerHTML = `<div class="ic">${icon(typeKey)}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>
       <div class="m">${fmtTime(x.start)}${x.end ? ' – ' + fmtTime(x.end) : ''}</div></div>
-      <div class="flags">${x.notes ? `<span title="Has notes">${icon('note')}</span>` : ''}${undecided(x) ? `<span class="optpill">${x.options.length} options</span>` : primaryMapUrl(x) ? `<a class="map" href="${esc(primaryMapUrl(x))}" target="_blank" rel="noopener">Map ↗</a>` : ''}</div>`;
+      <div class="flags">${x.notes ? `<span title="Has notes">${icon('note')}</span>` : ''}${undecided(x) ? `<span class="optpill">${x.options.length} options</span>` : mapLink(effLoc(x), 'Map ↗', 'map')}</div>`;
     el.addEventListener('click', ev => { if (!ev.target.closest('.map')) openView(x); });
     return el;
   }
@@ -251,13 +251,9 @@
     const loc = effLoc(x), p = loc?.place;
     $('#vPlaceRow').hidden = !p;
     if (p) $('#vPlace').innerHTML = `<b>${esc(p.name)}</b>${p.address ? `<small>${esc(p.address)}</small>` : ''}`;
-    const links = [];
-    if (loc?.maps) links.push(['Open in maps ↗', loc.maps, 'primary']);
-    if (p) links.push(...openInLinks(p));
     renderViewOptions(x);
-    $('#vLinks').innerHTML = links.map(([label, href, cls]) =>
-      `<a class="btn ${cls || 'ghost'}" href="${esc(href)}" target="_blank" rel="noopener">${label}</a>`).join('');
-    $('#vLinks').hidden = !links.length;
+    $('#vLinks').innerHTML = mapLink(loc, 'Open in Maps ↗', 'btn primary');
+    $('#vLinks').hidden = !$('#vLinks').innerHTML;
     show('#viewDrawer');
   }
   $('#vEdit').onclick = () => openDrawer(viewing);
@@ -274,7 +270,7 @@
       $('#vPills').classList.toggle('deciding', deciding);
       $('#vPills').innerHTML = opts.map(o => deciding
         ? `<button type="button" data-id="${o.id}"><span>${esc(o.name)}</span><i>✓</i></button>`
-        : `<a href="${esc(optionUrl(o))}" target="_blank" rel="noopener"><span>${esc(o.name)}</span><i>↗</i></a>`).join('');
+        : mapLink(o, `<span>${esc(o.name)}</span><i>↗</i>`, '')).join('');
       $('#vPills').querySelectorAll('button').forEach(b => b.onclick = () => {
         x.decided = b.dataset.id; deciding = false; save(); renderGrid(); openView(x); toast('Decided!');
       });
@@ -282,7 +278,7 @@
     } else {
       const others = opts.filter(o => o !== picked);
       $('#vOtherSum').textContent = `Other options (${others.length})`;
-      $('#vOtherPills').innerHTML = others.map(o => `<a href="${esc(optionUrl(o))}" target="_blank" rel="noopener"><span>${esc(o.name)}</span><i>↗</i></a>`).join('');
+      $('#vOtherPills').innerHTML = others.map(o => mapLink(o, `<span>${esc(o.name)}</span><i>↗</i>`, '')).join('');
       $('#vOther').open = false;
     }
   }
@@ -529,13 +525,38 @@
   }
   function primaryMapUrl(x) { const l = effLoc(x); return !l ? '' : l.maps || (l.place ? gmaps(l.place) : ''); }
   const optionUrl = o => o.maps || (o.place ? gmaps(o.place) : '');
-  function openInLinks(p) {
-    const ll = `${p.lat},${p.lon}`, q = encodeURIComponent(p.name);
-    return [
-      ['Google Maps', `https://www.google.com/maps/search/?api=1&query=${ll}`],
-      ['Waze', `https://waze.com/ul?ll=${ll}&navigate=yes`],
-    ];
+  /* ---------- maps app preference ---------- */
+  const PREF = 'xkk-maps-app';
+  const getPref = () => { try { return localStorage.getItem(PREF) || ''; } catch (e) { return ''; } };
+  const setPref = v => { try { v ? localStorage.setItem(PREF, v) : localStorage.removeItem(PREF); } catch (e) {} };
+  const appUrl = (app, p) => app === 'waze' ? `https://waze.com/ul?ll=${p.lat},${p.lon}&navigate=yes` : gmaps(p);
+
+  // One way to open any location: a pasted link opens as-is; a searched place
+  // opens in the saved app, or asks which app the first time.
+  function mapLink(t, inner, cls) {
+    if (t?.maps) return `<a class="${cls}" href="${esc(t.maps)}" target="_blank" rel="noopener">${inner}</a>`;
+    if (!t?.place) return '';
+    const pref = getPref();
+    if (pref) return `<a class="${cls}" href="${esc(appUrl(pref, t.place))}" target="_blank" rel="noopener">${inner}</a>`;
+    return `<button type="button" class="${cls}" data-mapchoose="${esc(JSON.stringify(t.place))}">${inner}</button>`;
   }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-mapchoose]');
+    if (!b) return;
+    e.stopPropagation(); e.preventDefault();
+    openChooser(JSON.parse(b.dataset.mapchoose));
+  }, true);
+  function openChooser(p) {
+    $('#pickApps').innerHTML = [['google', 'Google Maps'], ['waze', 'Waze']]
+      .map(([v, label]) => `<a class="btn" data-v="${v}" href="${esc(appUrl(v, p))}" target="_blank" rel="noopener">${label}</a>`).join('');
+    $('#pickApps').querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+      setPref(a.dataset.v); setTimeout(() => { hide(); renderGrid(); }, 50);
+    }));
+    show('#mapsPick');
+  }
+  function renderSeg() { const v = getPref(); document.querySelectorAll('#mapsSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); }
+  document.querySelectorAll('#mapsSeg button').forEach(b => b.onclick = () => { setPref(b.dataset.v); renderSeg(); renderGrid(); toast('Saved'); });
+  $('#openSettings').onclick = () => { renderSeg(); show('#settings'); };
 
   /* ---------- day switching: tabs + swipe ---------- */
   function changeDay(i, dir) {

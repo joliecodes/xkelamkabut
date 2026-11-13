@@ -223,3 +223,15 @@ form input.invalid{border-color:#d9534f;box-shadow:0 0 0 3px rgba(217,83,79,.15)
 .vother summary{font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;margin-bottom:10px}
 .item .optpill{flex:none;display:inline-flex;align-items:center;height:24px;font-size:12px;line-height:1;font-weight:600;color:var(--c);background:#fff;border-radius:99px;padding:0 9px;white-space:nowrap}
 .vopts .btn{width:100%}
+
+/* settings + maps chooser */
+.hero .gear{position:absolute;top:calc(16px + env(safe-area-inset-top));right:14px;border:0;background:rgba(255,255,255,.18);color:#fff;border-radius:50%;width:38px;height:38px;display:grid;place-items:center;cursor:pointer}
+.hero .gear .ico{width:19px;height:19px}
+.pickhint{font-size:13px;margin:-6px 0 14px}
+.pickapps{display:flex;flex-direction:column;gap:8px}
+.pickapps a{display:block;text-align:center;text-decoration:none}
+.seg{display:flex;background:#f1efea;border-radius:12px;padding:4px;gap:4px;margin-bottom:6px}
+.seg button{flex:1;border:0;background:none;border-radius:9px;padding:10px 4px;font-weight:600;font-size:14px;cursor:pointer;color:var(--muted)}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(36,50,58,.12)}
+button.map{border:0;cursor:pointer;font-family:inherit}
+.vlinks .btn.primary{display:block}
