@@ -225,12 +225,31 @@
     el.style.setProperty('--c', T.c); el.style.setProperty('--bg', T.bg);
     el.innerHTML = `<div class="ic">${icon(typeKey)}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>
-      <div class="m">${fmtTime(x.start)}${x.end ? ' – ' + fmtTime(x.end) : ''}</div>
-      ${x.notes ? `<div class="n">${esc(x.notes)}</div>` : ''}</div>
-      ${x.maps ? `<a class="map" href="${esc(x.maps)}" target="_blank" rel="noopener">Map ↗</a>` : ''}`;
-    el.addEventListener('click', ev => { if (!ev.target.closest('.map')) openDrawer(x); });
+      <div class="m">${fmtTime(x.start)}${x.end ? ' – ' + fmtTime(x.end) : ''}</div></div>
+      <div class="flags">${x.notes ? `<span title="Has notes">${icon('note')}</span>` : ''}
+      ${x.maps ? `<a class="map" href="${esc(x.maps)}" target="_blank" rel="noopener">Map ↗</a>` : ''}</div>`;
+    el.addEventListener('click', ev => { if (!ev.target.closest('.map')) openView(x); });
     return el;
   }
+
+  /* ---------- view item ---------- */
+  let viewing = null;
+  function openView(x) {
+    viewing = x;
+    const k = TYPES[x.type] ? x.type : 'other', T = TYPES[k];
+    const d = $('#viewDrawer');
+    d.style.setProperty('--c', T.c); d.style.setProperty('--bg', T.bg);
+    $('#vBadge').innerHTML = icon(k);
+    $('#vType').textContent = T.label;
+    $('#vTitle').textContent = x.title;
+    $('#vTime').textContent = fmtTime(x.start) + (x.end ? ' – ' + fmtTime(x.end) : '');
+    $('#vNotesRow').hidden = !x.notes;
+    $('#vNotes').textContent = x.notes || '';
+    const m = $('#vMaps');
+    m.hidden = !x.maps; if (x.maps) m.href = x.maps;
+    show('#viewDrawer');
+  }
+  $('#vEdit').onclick = () => openDrawer(viewing);
 
   /* ---------- item drawer ---------- */
   const form = $('#itemForm');
@@ -296,7 +315,8 @@
     if (!data.title || !data.start) return;
     if (editing) Object.assign(editing, data);
     else day.items.push({ id: uid(), ...data });
-    save(); hide(); renderGrid();
+    save(); renderGrid();
+    if (editing) openView(editing); else hide();
     toast(editing ? 'Saved' : 'Added');
   });
 
@@ -335,7 +355,11 @@
 
   /* ---------- drawer show/hide ---------- */
   let openEl = null;
-  function show(sel) { openEl = $(sel); openEl.classList.add('on'); $('#backdrop').classList.add('on'); }
+  function show(sel) {
+    if (openEl && openEl !== $(sel)) openEl.classList.remove('on');
+    openEl = $(sel); openEl.classList.add('on'); $('#backdrop').classList.add('on');
+  }
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => hide()));
   function hide() { openEl?.classList.remove('on'); $('#backdrop').classList.remove('on'); openEl = null; }
   $('#backdrop').onclick = hide;
   document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });

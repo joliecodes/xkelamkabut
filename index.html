@@ -26,6 +26,11 @@
     <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
     <symbol id="i-plane" viewBox="0 0 24 24"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></symbol>
     <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8M16 17H8M10 9H8"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+    <symbol id="i-nav" viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></symbol>
   </defs>
 </svg>
 
@@ -61,6 +66,7 @@
 <div class="backdrop" id="backdrop"></div>
 <div class="drawer" id="drawer" role="dialog" aria-modal="true">
   <div class="grab"></div>
+  <button type="button" class="x" data-close aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
 
   <!-- Step 1: pick a card -->
   <div class="step" id="step1">
@@ -92,8 +98,23 @@
 </div>
 
 <!-- Day menu -->
+<!-- View item -->
+<div class="drawer" id="viewDrawer" role="dialog" aria-modal="true">
+  <div class="grab"></div>
+  <div class="viewhead">
+    <span class="badge" id="vBadge"></span>
+    <div class="vt"><div class="vtype" id="vType"></div><h3 id="vTitle"></h3></div>
+    <button type="button" class="round" id="vEdit" aria-label="Edit"><svg class="ico"><use href="#i-edit"/></svg></button>
+    <button type="button" class="round" data-close aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="vrow"><svg class="ico"><use href="#i-clock"/></svg><span id="vTime"></span></div>
+  <div class="vrow" id="vNotesRow"><svg class="ico"><use href="#i-note"/></svg><div id="vNotes"></div></div>
+  <a class="btn maps" id="vMaps" target="_blank" rel="noopener"><svg class="ico"><use href="#i-nav"/></svg>Open in Google Maps</a>
+</div>
+
 <div class="drawer small" id="dayMenu" role="dialog" aria-modal="true">
   <div class="grab"></div>
+  <button type="button" class="x" data-close aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
   <h3>Day options</h3>
   <form id="dayForm">
     <label>Label<input name="label" placeholder="e.g. Arrive"></label>

@@ -92,6 +92,23 @@ main{max-width:600px;margin:0 auto;padding:0 14px}
 .types{display:flex;gap:8px;overflow-x:auto;margin:0 -18px 14px;padding:0 18px 4px;scrollbar-width:none}
 .types button{flex:none;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:8px 12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px}
 .types button.on{border-color:var(--c);background:var(--bg);color:var(--ink)}
+.drawer .x{position:absolute;top:14px;right:14px;border:0;background:#f1efea;border-radius:50%;width:34px;height:34px;display:grid;place-items:center;cursor:pointer;color:var(--ink);z-index:2}
+.drawer .x .ico,.round .ico{width:18px;height:18px}
+.drawer h3,#pickTitle{padding-right:44px}
+.round{border:0;background:#f1efea;border-radius:50%;width:38px;height:38px;display:grid;place-items:center;cursor:pointer;color:var(--ink);flex:none}
+.viewhead{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.viewhead .badge{width:44px;height:44px;border-radius:12px}
+.viewhead .badge .ico{width:22px;height:22px}
+.viewhead .vt{flex:1;min-width:0}
+.viewhead h3{margin:0;padding:0;font-size:22px;line-height:1.2}
+.vtype{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;color:var(--c)}
+.vrow{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--line);font-size:16px;line-height:1.45}
+.vrow .ico{color:var(--muted);margin-top:2px}
+#vNotes{white-space:pre-wrap;flex:1}
+.btn.maps{display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;margin-top:10px}
+.btn.maps .ico{width:18px;height:18px}
+.item .flags{display:flex;align-items:center;gap:6px;flex:none;align-self:center;color:var(--c)}
+.item .flags .ico{width:15px;height:15px;opacity:.8}
 .step{display:none}.step.on{display:block}
 .cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
 .cards button{border:0;background:var(--bg);border-radius:14px;padding:14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:10px;min-height:112px;transition:transform .1s}
@@ -117,3 +134,4 @@ form input:focus,form textarea:focus{border-color:var(--sea)}
 
 .toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 14px;border-radius:10px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
 .toast.on{opacity:1}
+[hidden]{display:none!important}
