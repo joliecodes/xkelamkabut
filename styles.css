@@ -34,7 +34,23 @@ main{max-width:600px;margin:0 auto;padding:0 14px}
 .dayhead button{border:0;background:none;color:var(--muted);font-size:20px;padding:4px 8px;cursor:pointer}
 
 /* hour grid */
-.grid{background:var(--card);border-radius:16px;box-shadow:0 2px 10px rgba(36,50,58,.06);overflow:hidden;margin-bottom:16px}
+.grid{position:relative;background:var(--card);border-radius:16px;box-shadow:0 2px 10px rgba(36,50,58,.06);margin-bottom:16px;padding-top:6px}
+.grid .hl{position:absolute;left:58px;right:0;height:0;border-top:1px solid var(--line);margin-top:6px}
+.grid .hl span{position:absolute;left:-52px;top:-8px;font-size:11px;font-weight:600;color:var(--muted);width:44px;text-align:right}
+.grid .hh{position:absolute;left:58px;right:0;height:0;border-top:1px dashed #f1ece3;margin-top:6px}
+.grid .lane{position:absolute;left:62px;right:8px;top:6px;bottom:6px;cursor:pointer}
+.grid .now{position:absolute;left:58px;right:0;height:0;border-top:2px solid var(--coral);margin-top:6px;z-index:3;pointer-events:none}
+.grid .now::before{content:"";position:absolute;left:-5px;top:-6px;width:10px;height:10px;border-radius:50%;background:var(--coral)}
+.lane .item{position:absolute;overflow:hidden;box-shadow:0 1px 3px rgba(36,50,58,.06)}
+.lane .item.short{align-items:center;padding:3px 8px;gap:8px}
+.lane .item.short .ic{width:22px;height:22px;border-radius:6px}
+.lane .item.short .ic .ico{width:13px;height:13px}
+.lane .item.short .body{display:flex;align-items:baseline;gap:6px;min-width:0}
+.lane .item.short .t{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lane .item.short .m{font-size:11px;white-space:nowrap;margin:0}
+.lane .item.short .n{display:none}
+.lane .item.short .map{padding:2px 7px;font-size:11px}
+.lane .item:not(.tall) .n{-webkit-line-clamp:1}
 .hour{display:flex;border-bottom:1px solid var(--line);min-height:52px}
 .hour:last-child{border-bottom:0}
 .hour .h{width:62px;flex:none;padding:8px 0 0 12px;font-size:12px;font-weight:600;color:var(--muted)}

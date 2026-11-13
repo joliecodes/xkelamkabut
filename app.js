@@ -10,6 +10,10 @@
   };
   const icon = name => `<svg class="ico"><use href="#i-${name}"/></svg>`;
   const FIRST_HOUR = 6, LAST_HOUR = 23;
+  const HOUR_PX = 72;       // height of one hour on the timeline
+  const DEFAULT_MIN = 30;   // items without an end time show as 30 min
+  const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
+  const fromMin = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
   const $ = s => document.querySelector(s);
   const uid = () => Math.random().toString(36).slice(2, 9);
@@ -131,35 +135,100 @@
       <button aria-label="Day options" id="dayOpts">⋯</button>`;
     $('#dayOpts').onclick = openDayMenu;
 
-    const items = [...day.items].sort((a, b) => a.start.localeCompare(b.start));
-    const hours = items.map(x => +x.start.slice(0, 2));
-    const from = Math.min(FIRST_HOUR, ...hours), to = Math.max(LAST_HOUR, ...hours);
-    const isToday = day.date === todayISO(), nowH = new Date().getHours();
+    // Timeline: items placed by start/end, like a calendar app
+    const items = day.items.map(x => {
+      const s = toMin(x.start);
+      let e = x.end ? toMin(x.end) : s + DEFAULT_MIN;
+      if (e <= s) e = s + DEFAULT_MIN;
+      return { x, s, e };
+    }).sort((a, b) => a.s - b.s || b.e - a.e);
+
+    const from = Math.min(FIRST_HOUR, ...items.map(i => Math.floor(i.s / 60)));
+    const to = Math.max(LAST_HOUR, ...items.map(i => Math.ceil(i.e / 60)));
+    const y = min => (min - from * 60) / 60 * HOUR_PX;
 
     grid.innerHTML = '';
+    grid.style.height = `${(to - from) * HOUR_PX + 12}px`;
+
+    // hour + half-hour lines
     for (let h = from; h <= to; h++) {
-      const row = document.createElement('div');
-      row.className = 'hour' + (isToday && h === nowH ? ' now' : '');
-      row.innerHTML = `<div class="h">${fmtHour(h)}</div><div class="slot"></div>`;
-      const slot = row.querySelector('.slot');
-      items.filter(x => +x.start.slice(0, 2) === h).forEach(x => slot.appendChild(itemEl(x)));
-      slot.addEventListener('click', e => { if (e.target === slot) openDrawer(null, `${String(h).padStart(2, '0')}:00`); });
-      grid.appendChild(row);
+      const line = document.createElement('div');
+      line.className = 'hl'; line.style.top = `${y(h * 60)}px`;
+      line.innerHTML = `<span>${h < to || h === 24 ? fmtHour(h) : fmtHour(h)}</span>`;
+      grid.appendChild(line);
+      if (h < to) {
+        const half = document.createElement('div');
+        half.className = 'hh'; half.style.top = `${y(h * 60 + 30)}px`;
+        grid.appendChild(half);
+      }
+    }
+
+    // lane catches taps on empty space → snap to nearest half hour above
+    const lane = document.createElement('div');
+    lane.className = 'lane';
+    lane.addEventListener('click', e => {
+      if (e.target !== lane) return;
+      const r = lane.getBoundingClientRect();
+      const min = from * 60 + Math.floor(((e.clientY - r.top) / HOUR_PX * 60) / 30) * 30;
+      openDrawer(null, fromMin(Math.min(min, 23 * 60 + 30)));
+    });
+    grid.appendChild(lane);
+
+    // side-by-side columns for overlapping items
+    layoutColumns(items).forEach(({ x, s, e, col, cols }) => {
+      const el = itemEl(x, s, e);
+      el.style.top = `${y(s) + 1}px`;
+      el.style.height = `${Math.max((e - s) / 60 * HOUR_PX - 3, 22)}px`;
+      el.style.left = `calc(${(col / cols) * 100}% + ${col ? 2 : 0}px)`;
+      el.style.width = `calc(${100 / cols}% - ${cols > 1 ? 2 : 0}px)`;
+      lane.appendChild(el);
+    });
+
+    // current time line
+    if (day.date === todayISO()) {
+      const n = new Date(), m = n.getHours() * 60 + n.getMinutes();
+      if (m >= from * 60 && m <= to * 60) {
+        const now = document.createElement('div');
+        now.className = 'now'; now.style.top = `${y(m)}px`;
+        grid.appendChild(now);
+      }
     }
   }
 
-  function itemEl(x) {
+  // Group overlapping items into clusters, then give each a column
+  function layoutColumns(items) {
+    const out = []; let cluster = [], clusterEnd = -1;
+    const flush = () => {
+      const colsEnd = [];
+      cluster.forEach(it => {
+        let c = colsEnd.findIndex(end => end <= it.s);
+        if (c === -1) { c = colsEnd.length; colsEnd.push(it.e); } else colsEnd[c] = it.e;
+        it.col = c;
+      });
+      cluster.forEach(it => { it.cols = colsEnd.length; out.push(it); });
+      cluster = []; clusterEnd = -1;
+    };
+    items.forEach(it => {
+      if (cluster.length && it.s >= clusterEnd) flush();
+      cluster.push(it); clusterEnd = Math.max(clusterEnd, it.e);
+    });
+    if (cluster.length) flush();
+    return out;
+  }
+
+  function itemEl(x, s, e) {
     const T = TYPES[x.type] || TYPES.other;
-    const el = document.createElement('div');
-    el.className = 'item';
-    el.style.setProperty('--c', T.c); el.style.setProperty('--bg', T.bg);
     const typeKey = TYPES[x.type] ? x.type : 'other';
+    const mins = e - s;
+    const el = document.createElement('div');
+    el.className = 'item' + (mins <= 30 ? ' short' : '') + (mins >= 90 ? ' tall' : '');
+    el.style.setProperty('--c', T.c); el.style.setProperty('--bg', T.bg);
     el.innerHTML = `<div class="ic">${icon(typeKey)}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>
       <div class="m">${fmtTime(x.start)}${x.end ? ' – ' + fmtTime(x.end) : ''}</div>
       ${x.notes ? `<div class="n">${esc(x.notes)}</div>` : ''}</div>
       ${x.maps ? `<a class="map" href="${esc(x.maps)}" target="_blank" rel="noopener">Map ↗</a>` : ''}`;
-    el.addEventListener('click', e => { if (!e.target.closest('.map')) openDrawer(x); });
+    el.addEventListener('click', ev => { if (!ev.target.closest('.map')) openDrawer(x); });
     return el;
   }
 
@@ -212,7 +281,6 @@
     item ? goStep2() : goStep1();
     show('#drawer');
   }
-  $('#cancel1').onclick = () => hide();
 
   form.addEventListener('submit', e => {
     e.preventDefault();
@@ -239,7 +307,6 @@
     day.items = day.items.filter(x => x !== editing);
     save(); hide(); renderGrid(); toast('Deleted');
   };
-  $('#cancel').onclick = hide;
 
   const normaliseUrl = u => !u ? '' : /^https?:\/\//i.test(u) ? u : 'https://' + u;
 
