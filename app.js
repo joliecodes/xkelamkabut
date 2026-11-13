@@ -2,12 +2,13 @@
 (() => {
   const KEY = 'xkk-trip-v1';
   const TYPES = {
-    activity:  { label: 'Activity',  icon: '🏖️', c: '#2a8c95', bg: '#eaf5f5' },
-    meal:      { label: 'Meal',      icon: '🍜', c: '#e07a5f', bg: '#fcefea' },
-    rest:      { label: 'Rest',      icon: '🛏️', c: '#9a6fb0', bg: '#f3edf7' },
-    transport: { label: 'Transport', icon: '🚕', c: '#5b7fa6', bg: '#ecf1f7' },
-    other:     { label: 'Other',     icon: '📌', c: '#d9a441', bg: '#fbf4e4' },
+    activity:  { label: 'Activity',  desc: 'Beach, sights, things to do',   c: '#2a8c95', bg: '#eaf5f5' },
+    meal:      { label: 'Meal',      desc: 'Breakfast, lunch, dinner, snacks', c: '#e07a5f', bg: '#fcefea' },
+    rest:      { label: 'Rest',      desc: 'Hotel, nap, downtime',          c: '#9a6fb0', bg: '#f3edf7' },
+    transport: { label: 'Transport', desc: 'Flights, Grab, transfers',      c: '#5b7fa6', bg: '#ecf1f7' },
+    other:     { label: 'Other',     desc: 'Shopping, errands, anything else', c: '#c4902e', bg: '#fbf4e4' },
   };
+  const icon = name => `<svg class="ico"><use href="#i-${name}"/></svg>`;
   const FIRST_HOUR = 6, LAST_HOUR = 23;
 
   const $ = s => document.querySelector(s);
@@ -122,7 +123,7 @@
     const day = trip.days[cur];
     if (!day) {
       head.innerHTML = '';
-      grid.innerHTML = `<div class="empty"><div class="big">🗓️</div><p><b>No days yet</b></p><p class="muted">Tap + Add Day to begin.</p></div>`;
+      grid.innerHTML = `<div class="empty"><div class="big">${icon('calendar')}</div><p><b>No days yet</b></p><p class="muted">Tap + Add Day to begin.</p></div>`;
       return;
     }
     head.innerHTML = `<div><h2>${day.date ? fmtDate(day.date, { weekday: 'long', day: 'numeric', month: 'short' }) : `Day ${cur + 1}`}</h2>
@@ -152,7 +153,8 @@
     const el = document.createElement('div');
     el.className = 'item';
     el.style.setProperty('--c', T.c); el.style.setProperty('--bg', T.bg);
-    el.innerHTML = `<div class="ic">${T.icon}</div>
+    const typeKey = TYPES[x.type] ? x.type : 'other';
+    el.innerHTML = `<div class="ic">${icon(typeKey)}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>
       <div class="m">${fmtTime(x.start)}${x.end ? ' – ' + fmtTime(x.end) : ''}</div>
       ${x.notes ? `<div class="n">${esc(x.notes)}</div>` : ''}</div>
@@ -163,36 +165,54 @@
 
   /* ---------- item drawer ---------- */
   const form = $('#itemForm');
-  let editing = null, pickedType = 'activity';
+  let editing = null, pickedType = 'activity', pendingStart = '';
+  const PLACEHOLDER = { activity: 'e.g. Beach', meal: 'e.g. Lunch', rest: 'e.g. Hotel', transport: 'e.g. Grab to airport', other: 'e.g. Shopping' };
 
-  function renderTypes() {
-    const wrap = $('#types'); wrap.innerHTML = '';
+  // Step 1: card picker
+  function renderCards() {
+    const wrap = $('#cards'); wrap.innerHTML = '';
     Object.entries(TYPES).forEach(([k, T]) => {
       const b = document.createElement('button');
-      b.type = 'button'; b.className = k === pickedType ? 'on' : '';
+      b.type = 'button';
       b.style.setProperty('--c', T.c); b.style.setProperty('--bg', T.bg);
-      b.innerHTML = `<span>${T.icon}</span>${T.label}`;
-      b.onclick = () => { pickedType = k; renderTypes(); form.title.placeholder = PLACEHOLDER[k]; };
+      b.innerHTML = `<span class="ci">${icon(k)}</span><span><b>${T.label}</b><small>${T.desc}</small></span>`;
+      b.onclick = () => { pickedType = k; goStep2(); };
       wrap.appendChild(b);
     });
   }
-  const PLACEHOLDER = { activity: 'e.g. Beach', meal: 'e.g. Lunch', rest: 'e.g. Hotel', transport: 'e.g. Grab to airport', other: 'e.g. Shopping' };
+  function goStep1() {
+    $('#pickTitle').textContent = editing ? 'Change type' : `Add at ${fmtTime(pendingStart)}`;
+    renderCards();
+    $('#step1').classList.add('on'); $('#step2').classList.remove('on');
+  }
+
+  // Step 2: details form
+  function goStep2() {
+    const T = TYPES[pickedType];
+    const badge = $('#badge');
+    badge.style.setProperty('--c', T.c); badge.style.setProperty('--bg', T.bg);
+    badge.innerHTML = icon(pickedType);
+    $('#drawerTitle').textContent = editing ? `Edit ${T.label.toLowerCase()}` : `New ${T.label.toLowerCase()}`;
+    form.title.placeholder = PLACEHOLDER[pickedType];
+    $('#step2').classList.add('on'); $('#step1').classList.remove('on');
+    if (!editing && !form.title.value) setTimeout(() => form.title.focus(), 120);
+  }
+  $('#back').onclick = goStep1;
 
   function openDrawer(item, startTime) {
     editing = item;
     pickedType = item?.type || 'activity';
-    $('#drawerTitle').textContent = item ? 'Edit item' : `Add at ${fmtTime(startTime)}`;
+    pendingStart = item?.start || startTime;
     form.title.value = item?.title || '';
-    form.start.value = item?.start || startTime;
+    form.start.value = pendingStart;
     form.end.value = item?.end || '';
     form.maps.value = item?.maps || '';
     form.notes.value = item?.notes || '';
-    form.title.placeholder = PLACEHOLDER[pickedType];
     $('#delItem').hidden = !item; $('#delItem').textContent = 'Delete'; $('#delItem').dataset.armed = '';
-    renderTypes();
+    item ? goStep2() : goStep1();
     show('#drawer');
-    if (!item) setTimeout(() => form.title.focus(), 260);
   }
+  $('#cancel1').onclick = () => hide();
 
   form.addEventListener('submit', e => {
     e.preventDefault();
