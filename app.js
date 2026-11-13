@@ -10,7 +10,7 @@
   };
   const icon = name => `<svg class="ico"><use href="#i-${name}"/></svg>`;
   const FIRST_HOUR = 6, LAST_HOUR = 23;
-  const HOUR_PX = 72;       // height of one hour on the timeline
+  const HOUR_PX = 112;      // height of one hour on the timeline
   const DEFAULT_MIN = 30;   // items without an end time show as 30 min
   const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
   const fromMin = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
@@ -221,7 +221,7 @@
     const typeKey = TYPES[x.type] ? x.type : 'other';
     const mins = e - s;
     const el = document.createElement('div');
-    el.className = 'item' + (mins <= 30 ? ' short' : '') + (mins >= 90 ? ' tall' : '');
+    el.className = 'item' + (mins < 25 ? ' short' : '') + (mins >= 90 ? ' tall' : '');
     el.style.setProperty('--c', T.c); el.style.setProperty('--bg', T.bg);
     el.innerHTML = `<div class="ic">${icon(typeKey)}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>

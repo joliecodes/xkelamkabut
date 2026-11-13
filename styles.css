@@ -46,7 +46,7 @@ main{max-width:600px;margin:0 auto;padding:0 14px}
 .lane .item.short .ic{width:22px;height:22px;border-radius:6px}
 .lane .item.short .ic .ico{width:13px;height:13px}
 .lane .item.short .body{display:flex;align-items:baseline;gap:6px;min-width:0}
-.lane .item.short .t{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lane .item.short .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lane .item.short .m{font-size:11px;white-space:nowrap;margin:0}
 .lane .item.short .n{display:none}
 .lane .item.short .map{padding:2px 7px;font-size:11px}
