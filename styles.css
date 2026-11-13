@@ -43,8 +43,6 @@ main{max-width:600px;margin:0 auto;padding:0 14px}
 .grid .now::before{content:"";position:absolute;left:-5px;top:-6px;width:10px;height:10px;border-radius:50%;background:var(--coral)}
 .lane .item{position:absolute;overflow:hidden;box-shadow:0 1px 3px rgba(36,50,58,.06)}
 .lane .item.short{align-items:center;padding:3px 8px;gap:8px}
-.lane .item.short .ic{width:22px;height:22px;border-radius:6px}
-.lane .item.short .ic .ico{width:13px;height:13px}
 .lane .item.short .body{display:flex;align-items:baseline;gap:6px;min-width:0}
 .lane .item.short .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lane .item.short .m{font-size:11px;white-space:nowrap;margin:0}
@@ -290,3 +288,49 @@ button.map{border:0;cursor:pointer;font-family:inherit}
 .pempty{text-align:center;padding:40px 20px}
 .pempty .btn{display:inline-block;width:auto;padding:12px 22px;margin-top:14px}
 .tabs a{font-size:10.5px}
+
+/* ---------- bookings ---------- */
+.bsect{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;color:var(--muted);margin:16px 4px 8px}
+.bcard{background:#fff;border-radius:16px;box-shadow:0 2px 10px rgba(36,50,58,.06);padding:14px 16px;margin-bottom:12px;border-top:4px solid var(--c)}
+.bcard .bh{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.bcard .bh .badge{width:34px;height:34px;border-radius:10px}
+.bcard .bh .badge .ico{width:18px;height:18px}
+.bcard .bh div{flex:1;min-width:0}
+.bcard .bh b{display:block;font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bcard .bh small{display:block;font-size:12px;color:var(--muted);margin-top:1px}
+.bcard .bh .round{width:34px;height:34px;background:#f6f3ee}
+.bcard .bh .round .ico{width:16px;height:16px}
+.route{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin:2px 0 10px}
+.route .end{min-width:0}
+.route .end:last-child{text-align:right}
+.route .code{font-size:26px;font-weight:700;letter-spacing:.02em;line-height:1.1}
+.route .tm{font-size:15px;font-weight:600;margin-top:2px}
+.route .city{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.route .mid{flex:1;align-self:center;display:flex;align-items:center;gap:6px;color:var(--c);padding-top:4px}
+.route .mid::before,.route .mid::after{content:"";flex:1;border-top:1.5px dashed #cfd8df}
+.route .mid .ico{width:18px;height:18px}
+.stayd{display:flex;gap:10px;margin:2px 0 10px}
+.stayd div{flex:1;background:var(--bg);border-radius:12px;padding:9px 11px}
+.stayd small{display:block;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600}
+.stayd b{display:block;font-size:15px;font-weight:600;margin-top:2px}
+.stayd span{font-size:12px;color:var(--muted)}
+.kv{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.kv > span:first-child{color:var(--muted);width:92px;flex:none;font-size:13px}
+.kv > span:nth-child(2){flex:1;min-width:0;font-weight:500;overflow-wrap:anywhere}
+.kv .mini{border:0;background:#f6f3ee;border-radius:8px;width:30px;height:30px;display:grid;place-items:center;cursor:pointer;flex:none;color:var(--ink);text-decoration:none}
+.kv .mini .ico{width:15px;height:15px}
+.bcard .btn.primary{display:block;margin-top:10px;text-align:center;text-decoration:none;padding:11px}
+.bcard .kv.note > span:nth-child(2){font-weight:400;white-space:pre-wrap}
+.upload{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1.5px dashed #c9d9d9;background:#f6fbfb;border-radius:14px;padding:14px;cursor:pointer;color:var(--ink)}
+.upload .ico{width:22px;height:22px;color:var(--sea);flex:none}
+.upload b{display:block;font-size:15px}
+.upload small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.upload.slim{padding:10px 12px;margin-bottom:12px}
+.upload.slim .ico{width:18px;height:18px}
+.upload.busy{opacity:.6;pointer-events:none}
+.found{background:#fff7e3;border:1px solid #f0dfae;border-radius:12px;padding:10px 12px;font-size:13px;margin-bottom:12px;line-height:1.4}
+form input.filled,form textarea.filled{background:#fffbea;border-color:#f0dfae}
+.toggle{display:flex!important;align-items:center;gap:10px;font-size:15px!important;margin:4px 0 14px!important;cursor:pointer}
+.toggle input{width:20px!important;height:20px!important;min-height:0!important;margin:0!important;accent-color:var(--sea);flex:none}
+form textarea{min-height:70px}
+.toggle input{-webkit-appearance:auto!important;appearance:auto!important;border:0!important;padding:0!important}

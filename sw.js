@@ -1,6 +1,6 @@
 // Network-first while building: always try fresh files, fall back to cache when offline.
-const CACHE = 'xkk-v15';
-const ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.json', 'icons/icon.svg'];
+const CACHE = 'xkk-v16';
+const ASSETS = ['./', 'index.html', 'styles.css', 'parse.js', 'app.js', 'manifest.json', 'icons/icon.svg'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));

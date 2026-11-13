@@ -77,6 +77,7 @@
     if (t.color == null) t.color = i % PALETTE.length;
     t.days ||= [];
     t.packing ||= { sections: [] };
+    t.bookings ||= [];
     return t;
   };
   function loadDb() {
@@ -566,16 +567,19 @@
   const PREF = 'xkk-maps-app';
   const getPref = () => { try { return localStorage.getItem(PREF) || ''; } catch (e) { return ''; } };
   const setPref = v => { try { v ? localStorage.setItem(PREF, v) : localStorage.removeItem(PREF); } catch (e) {} };
-  const appUrl = (app, p) => app === 'waze' ? `https://waze.com/ul?ll=${p.lat},${p.lon}&navigate=yes` : gmaps(p);
+  const appUrl = (app, p) => p.query
+    ? (app === 'waze' ? `https://waze.com/ul?q=${encodeURIComponent(p.query)}&navigate=yes` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.query)}`)
+    : (app === 'waze' ? `https://waze.com/ul?ll=${p.lat},${p.lon}&navigate=yes` : gmaps(p));
 
   // One way to open any location: a pasted link opens as-is; a searched place
   // opens in the saved app, or asks which app the first time.
   function mapLink(t, inner, cls) {
     if (t?.maps) return `<a class="${cls}" href="${esc(t.maps)}" target="_blank" rel="noopener">${inner}</a>`;
-    if (!t?.place) return '';
+    const target = t?.place || (t?.query ? { query: t.query } : null);
+    if (!target) return '';
     const pref = getPref();
-    if (pref) return `<a class="${cls}" href="${esc(appUrl(pref, t.place))}" target="_blank" rel="noopener">${inner}</a>`;
-    return `<button type="button" class="${cls}" data-mapchoose="${esc(JSON.stringify(t.place))}">${inner}</button>`;
+    if (pref) return `<a class="${cls}" href="${esc(appUrl(pref, target))}" target="_blank" rel="noopener">${inner}</a>`;
+    return `<button type="button" class="${cls}" data-mapchoose="${esc(JSON.stringify(target))}">${inner}</button>`;
   }
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-mapchoose]');
@@ -654,6 +658,230 @@
   $('#backdrop').onclick = hide;
   document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
 
+  /* ---------- bookings ---------- */
+  const BOOK = {
+    flight: { label: 'Flight', icon: 'plane', c: '#5b7fa6', bg: '#ecf1f7', desc: 'Airline, route, times, seats', fields: [
+      ['airline', 'Airline', 'text', 'e.g. AirAsia'],
+      [['flightNo', 'Flight number', 'text', 'e.g. AK 545'], ['ref', 'Booking ref', 'text', 'e.g. GBSEQC']],
+      [['from', 'From', 'text', 'e.g. KUL'], ['to', 'To', 'text', 'e.g. PQC']],
+      [['depDate', 'Departure date', 'date'], ['depTime', 'Departure time', 'time']],
+      [['arrDate', 'Arrival date', 'date'], ['arrTime', 'Arrival time', 'time']],
+      [['seats', 'Seats', 'text', 'e.g. 27E, 27F'], ['baggage', 'Baggage', 'text', 'e.g. 20kg checked']],
+      ['notes', 'Notes', 'textarea', 'Terminal, meals, anything else'],
+    ] },
+    stay: { label: 'Stay', icon: 'hotel', c: '#9a6fb0', bg: '#f3edf7', desc: 'Hotel, address, check-in and out', fields: [
+      ['name', 'Name', 'text', 'e.g. Sunday Boutique Hotel'],
+      ['address', 'Address', 'text', 'Street, area, city'],
+      [['phone', 'Phone', 'tel', '+84…'], ['ref', 'Booking ID', 'text', '']],
+      [['inDate', 'Check-in date', 'date'], ['inTime', 'Check-in time', 'time']],
+      [['outDate', 'Check-out date', 'date'], ['outTime', 'Check-out time', 'time']],
+      ['room', 'Room', 'text', 'e.g. Deluxe Twin'],
+      ['notes', 'Notes', 'textarea', 'Breakfast, Wi-Fi, anything else'],
+    ] },
+    other: { label: 'Other', icon: 'other', c: '#c4902e', bg: '#fbf4e4', desc: 'Tours, car rental, tickets', fields: [
+      ['title', 'What is it?', 'text', 'e.g. Island hopping tour'],
+      [['date', 'Date', 'date'], ['time', 'Time', 'time']],
+      [['ref', 'Booking ref', 'text', ''], ['phone', 'Phone', 'tel', '']],
+      ['address', 'Location', 'text', 'Meeting point or address'],
+      ['notes', 'Notes', 'textarea', ''],
+    ] },
+  };
+  const bForm = $('#bookForm');
+  let bEditing = null, bKind = 'flight', bQueue = [];
+
+  const shortDate = iso => iso ? fmtDate(iso, { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+  const nights = (a, b) => (a && b) ? Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5) : 0;
+  const qLink = b => (b.name || b.address || b.title) ? { query: [b.name || b.title, b.address].filter(Boolean).join(', ') } : null;
+
+  function renderBookings() {
+    const list = $('#bookList'), all = trip.bookings;
+    if (!all.length) {
+      list.innerHTML = `<div class="pempty"><div class="big" style="color:var(--sea)">${icon('plane')}</div><p><b>No bookings yet</b></p><p class="muted">Add flights and stays by hand, or upload a confirmation PDF.</p><button type="button" class="btn" id="bookBegin">Add booking</button></div>`;
+      $('#bookBegin').onclick = () => openBooking(null);
+      return;
+    }
+    const sortKey = b => (b.depDate || b.inDate || b.date || '9') + (b.depTime || b.inTime || b.time || '');
+    const groups = [['flight', 'Flights'], ['stay', 'Stays'], ['other', 'Other']];
+    list.innerHTML = groups.map(([k, label]) => {
+      const items = all.filter(b => b.kind === k).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+      return items.length ? `<div class="bsect">${label}</div>${items.map(bookingCard).join('')}` : '';
+    }).join('');
+    list.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openBooking(trip.bookings.find(x => x.id === b.dataset.edit)));
+    list.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
+      try { await navigator.clipboard.writeText(b.dataset.copy); toast('Copied'); } catch (e) { toast(b.dataset.copy); }
+    });
+  }
+  function kv(label, value, extra = '', cls = '') { return value ? `<div class="kv ${cls}"><span>${label}</span><span>${esc(value)}</span>${extra}</div>` : ''; }
+  const copyBtn = v => `<button type="button" class="mini" data-copy="${esc(v)}" aria-label="Copy">${icon('copy')}</button>`;
+  const callBtn = v => `<a class="mini" href="tel:${esc(v.replace(/[^\d+]/g, ''))}" aria-label="Call">${icon('phone')}</a>`;
+  function bookingCard(b) {
+    const K = BOOK[b.kind], style = `style="--c:${K.c};--bg:${K.bg}"`;
+    const head = (title, sub) => `<div class="bh"><span class="badge" ${style}>${icon(K.icon)}</span><div><b>${esc(title)}</b><small>${esc(sub)}</small></div><button type="button" class="round" data-edit="${b.id}" aria-label="Edit">${icon('edit')}</button></div>`;
+    if (b.kind === 'flight') return `<div class="bcard" ${style}>${head([b.airline, b.flightNo].filter(Boolean).join(' · ') || 'Flight', shortDate(b.depDate))}
+      <div class="route"><div class="end"><div class="code">${esc(b.from || '—')}</div><div class="tm">${fmtTime(b.depTime)}</div><div class="city">${esc(b.fromCity || '')}</div></div>
+      <div class="mid">${icon('plane')}</div>
+      <div class="end"><div class="code">${esc(b.to || '—')}</div><div class="tm">${fmtTime(b.arrTime)}</div><div class="city">${esc(b.toCity || '')}${b.arrDate && b.arrDate !== b.depDate ? ' · ' + shortDate(b.arrDate) : ''}</div></div></div>
+      ${kv('Booking ref', b.ref, copyBtn(b.ref || ''))}${kv('Seats', b.seats)}${kv('Baggage', b.baggage)}${kv('Notes', b.notes, '', 'note')}</div>`;
+    if (b.kind === 'stay') {
+      const n = nights(b.inDate, b.outDate);
+      return `<div class="bcard" ${style}>${head(b.name || 'Stay', n ? `${n} night${n > 1 ? 's' : ''}` : '')}
+      <div class="stayd"><div><small>Check-in</small><b>${shortDate(b.inDate) || '—'}</b><span>${b.inTime ? 'from ' + fmtTime(b.inTime) : ''}</span></div><div><small>Check-out</small><b>${shortDate(b.outDate) || '—'}</b><span>${b.outTime ? 'by ' + fmtTime(b.outTime) : ''}</span></div></div>
+      ${kv('Address', b.address)}${kv('Phone', b.phone, b.phone ? callBtn(b.phone) + copyBtn(b.phone) : '')}${kv('Booking ID', b.ref, copyBtn(b.ref || ''))}${kv('Room', b.room)}${kv('Notes', b.notes, '', 'note')}
+      ${mapLink(qLink(b), 'Open in Maps ↗', 'btn primary')}</div>`;
+    }
+    return `<div class="bcard" ${style}>${head(b.title || 'Booking', [shortDate(b.date), fmtTime(b.time)].filter(Boolean).join(' · '))}
+      ${kv('Booking ref', b.ref, copyBtn(b.ref || ''))}${kv('Phone', b.phone, b.phone ? callBtn(b.phone) : '')}${kv('Location', b.address)}${kv('Notes', b.notes, '', 'note')}
+      ${b.address ? mapLink(qLink(b), 'Open in Maps ↗', 'btn primary') : ''}</div>`;
+  }
+
+  // Drawer: step 1 pick a kind (or upload), step 2 the form
+  function openBooking(b, prefill) {
+    bEditing = b; $('#bfound').hidden = true;
+    if (b || prefill) { bKind = b?.kind || prefill.kind; bStep2(b || prefill.data, !!prefill); }
+    else bStep1();
+    show('#bookDrawer');
+  }
+  function bStep1() {
+    $('#bcards').innerHTML = Object.entries(BOOK).map(([k, K]) => `<button type="button" data-k="${k}" style="--c:${K.c};--bg:${K.bg}"><span class="ci">${icon(K.icon)}</span><span><b>${K.label}</b><small>${K.desc}</small></span></button>`).join('');
+    $('#bcards').querySelectorAll('button').forEach(btn => btn.onclick = () => { bKind = btn.dataset.k; bStep2({}); });
+    $('#bstep1').classList.add('on'); $('#bstep2').classList.remove('on');
+  }
+  function bStep2(data, fromPdf) {
+    const K = BOOK[bKind];
+    $('#bbadge').style.setProperty('--c', K.c); $('#bbadge').style.setProperty('--bg', K.bg); $('#bbadge').innerHTML = icon(K.icon);
+    $('#btitle').textContent = `${bEditing ? 'Edit' : 'New'} ${K.label}`;
+    const field = ([name, label, type, ph = '']) => type === 'textarea'
+      ? `<label>${label}<textarea name="${name}" rows="2" placeholder="${esc(ph)}"></textarea></label>`
+      : `<label>${label}<input name="${name}" type="${type}" placeholder="${esc(ph)}"></label>`;
+    $('#bfields').innerHTML = K.fields.map(f => Array.isArray(f[0]) ? `<div class="two">${f.map(field).join('')}</div>` : field(f)).join('');
+    let filled = 0;
+    $('#bfields').querySelectorAll('input,textarea').forEach(el => {
+      const v = data[el.name] || '';
+      el.value = v;
+      if (fromPdf && v) { el.classList.add('filled'); filled++; }
+      el.addEventListener('input', () => el.classList.remove('filled'), { once: true });
+    });
+    if (fromPdf) {
+      $('#bfound').hidden = false;
+      $('#bfound').innerHTML = filled
+        ? `<b>Filled in ${filled} field${filled > 1 ? 's' : ''} from your PDF.</b> Check the highlighted ones before saving.${bQueue.length ? ` Next: ${bQueue.length} more booking${bQueue.length > 1 ? 's' : ''} from the same PDF.` : ''}`
+        : `<b>Couldn't find details in this PDF.</b> Please fill them in by hand.`;
+    }
+    $('#bsync').checked = bEditing ? !!bEditing.itemIds?.length : true;
+    $('#bdel').hidden = !bEditing; $('#bdel').textContent = 'Delete'; $('#bdel').dataset.armed = '';
+    $('#bstep2').classList.add('on'); $('#bstep1').classList.remove('on');
+  }
+  $('#bback').onclick = () => { if (!bEditing) bStep1(); else hide(); };
+  $('#addBooking').onclick = () => { bQueue = []; openBooking(null); };
+
+  bForm.addEventListener('submit', e => {
+    e.preventDefault();
+    const data = { kind: bKind };
+    $('#bfields').querySelectorAll('input,textarea').forEach(el => data[el.name] = el.value.trim());
+    let b = bEditing;
+    if (b) { unlinkBooking(b); Object.keys(b).forEach(k => { if (!['id', 'itemIds', 'fromCity', 'toCity'].includes(k)) delete b[k]; }); Object.assign(b, data); }
+    else { b = { id: uid(), itemIds: [], ...data, fromCity: bPrefillExtra.fromCity || '', toCity: bPrefillExtra.toCity || '' }; trip.bookings.push(b); }
+    const skipped = $('#bsync').checked ? linkBooking(b) : [];
+    save(); renderBookings(); renderGrid();
+    toast(skipped.length ? `Saved. Not added to itinerary: ${skipped.join(', ')}` : 'Saved');
+    if (bQueue.length) { const next = bQueue.shift(); bEditing = null; bPrefillExtra = next.data; bKind = next.kind; bStep2(next.data, true); }
+    else hide();
+  });
+  $('#bdel').onclick = e => {
+    const btn = e.currentTarget;
+    if (!btn.dataset.armed) { btn.dataset.armed = '1'; btn.textContent = 'Tap to confirm'; return; }
+    unlinkBooking(bEditing);
+    trip.bookings = trip.bookings.filter(x => x !== bEditing);
+    save(); hide(); renderBookings(); renderGrid(); toast('Booking deleted');
+  };
+
+  // Itinerary links: flights → Transport, stays → Rest, other → Other
+  function unlinkBooking(b) {
+    if (!b?.itemIds?.length) return;
+    trip.days.forEach(d => d.items = d.items.filter(i => !b.itemIds.includes(i.id)));
+    b.itemIds = [];
+  }
+  function linkBooking(b) {
+    const skipped = [], add = (date, start, item, label) => {
+      if (!date || !start) return;
+      const day = trip.days.find(d => d.date === date);
+      if (!day) { skipped.push(`${label} (no day for ${shortDate(date)})`); return; }
+      const it = { id: uid(), end: '', maps: '', notes: '', options: [], decided: null, place: null, bookingId: b.id, start, ...item };
+      let clash = findOverlap(day, it, null);
+      // Check-in is flexible: slide it to the next free half hour (up to 3 hours later)
+      for (let k = 0; clash && label === 'check-in' && k < 6; k++) {
+        const m = Math.ceil((toMin(it.start) + 1) / 30) * 30; if (m >= 24 * 60) break;
+        it.start = fromMin(m); clash = findOverlap(day, it, null);
+      }
+      if (clash) { skipped.push(`${label} (overlaps ${clash.title})`); return; }
+      day.items.push(it); b.itemIds.push(it.id);
+    };
+    const gq = q => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+    if (b.kind === 'flight') {
+      add(b.depDate, b.depTime, { type: 'transport', title: `Flight ${b.flightNo || ''}${b.to ? ' to ' + b.to : ''}`.replace(/\s+/g, ' ').trim(), notes: [b.ref && 'Ref ' + b.ref, b.seats && 'Seats ' + b.seats].filter(Boolean).join(' · ') }, 'departure');
+      add(b.arrDate || b.depDate, b.arrTime, { type: 'transport', title: `Land in ${b.toCity || b.to || 'destination'}`, notes: b.flightNo || '' }, 'arrival');
+    } else if (b.kind === 'stay') {
+      const maps = (b.name || b.address) ? gq([b.name, b.address].filter(Boolean).join(', ')) : '';
+      add(b.inDate, b.inTime || '14:00', { type: 'rest', title: `Check in · ${b.name || 'Stay'}`, maps, notes: b.ref ? 'Booking ID ' + b.ref : '' }, 'check-in');
+      add(b.outDate, b.outTime || '11:00', { type: 'rest', title: `Check out · ${b.name || 'Stay'}`, maps }, 'check-out');
+    } else {
+      add(b.date, b.time, { type: 'other', title: b.title || 'Booking', maps: b.address ? gq(b.address) : '', notes: b.ref ? 'Ref ' + b.ref : '' }, b.title || 'booking');
+    }
+    return skipped;
+  }
+
+  // PDF: read text on the device with pdf.js, then pattern-match (parse.js)
+  let bPrefillExtra = {};
+  let pdfReady = null;
+  function loadPdfJs() {
+    pdfReady ||= new Promise((res, rej) => {
+      const s = document.createElement('script'); s.src = 'libs/pdf.min.js';
+      s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'libs/pdf.worker.min.js'; res(window.pdfjsLib); };
+      s.onerror = () => { pdfReady = null; rej(new Error('pdf.js failed to load')); };
+      document.head.appendChild(s);
+    });
+    return pdfReady;
+  }
+  function toLines(src) {
+    const items = [...src].sort((a, b) => b.y - a.y || a.x - b.x), lines = [];
+    for (const it of items) { const l = lines.find(l => Math.abs(l.y - it.y) < 3); l ? l.items.push(it) : lines.push({ y: it.y, items: [it] }); }
+    return lines.sort((a, b) => b.y - a.y).map(l => {
+      let s = '', end = null;
+      l.items.sort((a, b) => a.x - b.x).forEach(it => { if (end !== null) s += it.x - end > 12 ? '   ' : ' '; s += it.s.trim(); end = it.x + it.w; });
+      return s;
+    }).join('\n') + '\n\n';
+  }
+  async function pdfToText(buf) {
+    const lib = await loadPdfJs();
+    const doc = await lib.getDocument({ data: buf }).promise;
+    let text = '', cols = '';
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p), mid = page.getViewport({ scale: 1 }).width / 2;
+      const all = (await page.getTextContent()).items.filter(i => i.str && i.str.trim()).map(i => ({ s: i.str, x: i.transform[4], y: i.transform[5], w: i.width }));
+      text += toLines(all); cols += toLines(all.filter(i => i.x < mid)) + toLines(all.filter(i => i.x >= mid));
+    }
+    return { text, cols };
+  }
+  let uploadFrom = null;
+  ['uploadPdf1', 'uploadPdf2'].forEach(id => $('#' + id).onclick = () => { uploadFrom = id; $('#pdfInput').value = ''; $('#pdfInput').click(); });
+  $('#pdfInput').addEventListener('change', async e => {
+    const file = e.target.files[0]; if (!file) return;
+    const btn = $('#' + uploadFrom); btn.classList.add('busy');
+    const label = btn.querySelector('b'), was = label.textContent; label.textContent = 'Reading PDF…';
+    try {
+      const r = window.XKKParse.parseBooking(await pdfToText(await file.arrayBuffer()));
+      const found = r.kind === 'flight' ? r.flights.map(f => ({ kind: 'flight', data: f }))
+        : r.kind === 'stay' ? [{ kind: 'stay', data: r.stay }]
+        : [{ kind: uploadFrom === 'uploadPdf2' ? bKind : 'other', data: r.other || {} }];
+      if (!found.length) found.push({ kind: uploadFrom === 'uploadPdf2' ? bKind : 'flight', data: {} });
+      const first = found.shift(); bQueue = found;
+      bEditing = null; bPrefillExtra = first.data; bKind = first.kind;
+      bStep2(first.data, true);
+    } catch (err) {
+      toast("Couldn't read that PDF. Try another, or fill in by hand.");
+    } finally { btn.classList.remove('busy'); label.textContent = was; }
+  });
+
   /* ---------- routing ---------- */
   const VIEWS = ['trips', 'itinerary', 'bookings', 'packing'];
   function currentView() { const h = location.hash.slice(1); return VIEWS.includes(h) ? h : 'trips'; }
@@ -665,6 +893,7 @@
     renderHeader();
     if (v === 'trips') renderTrips();
     if (v === 'packing') renderPacking();
+    if (v === 'bookings') renderBookings();
     if (v === 'itinerary' && lastView !== 'itinerary') { renderDays(); renderGrid(); requestAnimationFrame(scrollToStart); }
     if (v !== 'itinerary') scrollTo(0, 0);
     lastView = v;
@@ -733,6 +962,8 @@
     copy.id = uid(); copy.title = `${menuTrip.title} (copy)`; copy.color = db.trips.length % PALETTE.length;
     copy.days.forEach(d => { d.id = uid(); d.items.forEach(i => i.id = uid()); });
     copy.packing.sections.forEach(s => { s.id = uid(); s.items.forEach(i => { i.id = uid(); i.done = false; }); });
+    copy.bookings.forEach(b => { b.id = uid(); b.itemIds = []; });
+    copy.days.forEach(d => d.items.forEach(i => delete i.bookingId));
     db.trips.push(copy); save(); hide(); renderTrips(); toast('Trip duplicated');
   };
   $('#tmDelete').onclick = e => {
