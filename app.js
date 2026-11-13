@@ -76,7 +76,14 @@
     t.id ||= uid();
     if (t.color == null) t.color = i % PALETTE.length;
     t.days ||= [];
-    t.packing ||= { sections: [] };
+    t.packing ||= {};
+    if (!t.packing.travelers) {
+      // older lists: categories go to "Me"; traveller sections become their own tab
+      const old = t.packing.sections || [];
+      const me = { id: uid(), name: 'Me', sections: old.filter(s => s.kind !== 'traveler').map(s => ({ id: s.id, name: s.name, items: s.items })) };
+      const others = old.filter(s => s.kind === 'traveler').map(s => ({ id: uid(), name: s.name, sections: s.items.length ? [{ id: uid(), name: 'General', items: s.items }] : [] }));
+      t.packing = { travelers: [me, ...others], cur: me.id };
+    }
     t.bookings ||= [];
     return t;
   };
@@ -92,6 +99,11 @@
     return d;
   }
   let db = loadDb();
+  // One-time: flights used to make two items (take-off + landing); relink as one block
+  if (!db.flightBlocks) {
+    db.flightBlocks = true;
+    db.__relink = db.trips.flatMap(t => t.bookings.filter(b => b.kind === 'flight' && b.itemIds?.length).map(b => [t.id, b.id]));
+  }
   let trip = db.trips.find(t => t.id === db.current);
   let cur = 0;
   const save = () => { try { localStorage.setItem(DBKEY, JSON.stringify(db)); } catch (e) {} };
@@ -263,10 +275,17 @@
     el.style.setProperty('--c', T.c); el.style.setProperty('--bg', T.bg);
     el.innerHTML = `<div class="ic">${icon(typeKey)}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>
-      <div class="m">${fmtTime(x.start)}${x.end ? ' – ' + fmtTime(x.end) : ''}</div></div>
+      <div class="m">${x.flight ? flightMeta(x) : fmtTime(x.start) + (x.end ? ' – ' + fmtTime(x.end) : '')}</div></div>
       <div class="flags">${x.notes ? `<span title="Has notes">${icon('note')}</span>` : ''}${undecided(x) ? `<span class="optpill">${x.options.length} options</span>` : mapLink(effLoc(x), 'Map ↗', 'map')}</div>`;
     el.addEventListener('click', ev => { if (!ev.target.closest('.map')) openView(x); });
     return el;
+  }
+
+  // "12:45 pm KUL – 1:35 pm PQC · 1h 50m · clocks go back 1 hr"
+  function flightMeta(x) {
+    const f = x.flight, code = c => c ? ` <span class="tz">${esc(c)}</span>` : '';
+    const arr = f.arrTime ? `${fmtTime(f.arrTime)}${code(f.to)}${f.arrDate ? ` <span class="tz">${esc(fmtDate(f.arrDate, { day: 'numeric', month: 'short' }))}</span>` : ''}` : '';
+    return [`${fmtTime(x.start)}${code(f.from)}${arr ? ' – ' + arr : ''}`, f.dur != null && f.dur > 0 ? fmtDur(f.dur) : '', shiftText(f.shift)].filter(Boolean).join(' · ');
   }
 
   /* ---------- view item ---------- */
@@ -280,7 +299,12 @@
     $('#vBadge').innerHTML = icon(k);
     $('#vType').textContent = T.label;
     $('#vTitle').textContent = x.title;
-    $('#vTime').textContent = fmtTime(x.start) + (x.end ? ' – ' + fmtTime(x.end) : '');
+    if (x.flight) {
+      const f = x.flight;
+      $('#vTime').innerHTML = `<b>Departs</b> ${fmtTime(x.start)}${f.from ? ` ${esc(f.from)} time` : ''}`
+        + (f.arrTime ? `<br><b>Lands</b> ${fmtTime(f.arrTime)}${f.to ? ` ${esc(f.to)} time` : ''}${f.arrDate ? ', ' + esc(fmtDate(f.arrDate, { weekday: 'short', day: 'numeric', month: 'short' })) : ''}` : '')
+        + ([f.dur > 0 ? fmtDur(f.dur) + ' flight' : '', shiftText(f.shift)].filter(Boolean).length ? `<br><span class="muted">${[f.dur > 0 ? fmtDur(f.dur) + ' flight' : '', shiftText(f.shift)].filter(Boolean).join(' · ')}</span>` : '');
+    } else $('#vTime').textContent = fmtTime(x.start) + (x.end ? ' – ' + fmtTime(x.end) : '');
     $('#vNotesRow').hidden = !x.notes;
     $('#vNotes').textContent = x.notes || '';
     const loc = effLoc(x), p = loc?.place;
@@ -597,7 +621,43 @@
   }
   function renderSeg() { const v = getPref(); document.querySelectorAll('#mapsSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); }
   document.querySelectorAll('#mapsSeg button').forEach(b => b.onclick = () => { setPref(b.dataset.v); renderSeg(); renderGrid(); toast('Saved'); });
-  $('#openSettings').onclick = () => { renderSeg(); show('#settings'); };
+  $('#openSettings').onclick = () => {
+    renderSeg();
+    const onTrips = currentView() === 'trips', f = $('#tripSetForm');
+    f.hidden = onTrips;
+    $('#settingsTitle').textContent = onTrips ? 'Settings' : 'Trip settings';
+    if (!onTrips) {
+      f.title.value = trip.title || '';
+      f.start.value = trip.days[0]?.date || todayISO();
+      f.days.value = trip.days.length || 1;
+      $('#setErr').hidden = true; f.dataset.armed = '';
+    }
+    show('#settings');
+  };
+  $('#tripSetForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const f = e.target, n = Math.max(1, Math.min(60, +f.days.value || 1));
+    const removing = trip.days.slice(n), lost = removing.reduce((c, d) => c + d.items.length, 0);
+    if (lost && !f.dataset.armed) {
+      $('#setErr').textContent = `This removes ${removing.length} day${removing.length > 1 ? 's' : ''} with ${lost} item${lost > 1 ? 's' : ''}. Tap Save again to confirm.`;
+      $('#setErr').hidden = false; f.dataset.armed = '1'; return;
+    }
+    trip.title = f.title.value.trim() || 'My trip';
+    const oldStart = trip.days[0]?.date, newStart = f.start.value || oldStart || todayISO();
+    if (oldStart && newStart !== oldStart) {
+      const delta = Math.round((new Date(newStart + 'T00:00:00') - new Date(oldStart + 'T00:00:00')) / 864e5);
+      trip.days.forEach(d => { if (d.date) d.date = addDays(d.date, delta); });
+    }
+    if (n < trip.days.length) {
+      const ids = new Set(removing.flatMap(d => d.items.map(i => i.id)));
+      trip.bookings.forEach(b => b.itemIds = (b.itemIds || []).filter(id => !ids.has(id)));
+      trip.days = trip.days.slice(0, n);
+    }
+    while (trip.days.length < n) trip.days.push({ id: uid(), date: addDays(trip.days.at(-1)?.date || newStart, trip.days.length ? 1 : 0), label: '', items: [] });
+    cur = Math.min(cur, trip.days.length - 1);
+    save(); hide(); renderHeader(); renderDays(); renderGrid(); toast('Trip updated');
+  });
+  ['days', 'start'].forEach(n => $('#tripSetForm')[n].addEventListener('input', () => { $('#tripSetForm').dataset.armed = ''; $('#setErr').hidden = true; }));
 
   /* ---------- day switching: tabs + swipe ---------- */
   function changeDay(i, dir) {
@@ -658,6 +718,27 @@
   $('#backdrop').onclick = hide;
   document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
 
+  /* ---------- flight times across time zones ---------- */
+  // UTC offsets (hours) for common airports; used only when the flight time is unknown
+  const AIRPORT_TZ = { KUL: 8, PEN: 8, LGK: 8, BKI: 8, KCH: 8, JHB: 8, SZB: 8, SIN: 8, HKG: 8, MFM: 8, TPE: 8, MNL: 8, CEB: 8, DPS: 8, PEK: 8, PVG: 8, CAN: 8, PER: 8,
+    PQC: 7, SGN: 7, HAN: 7, DAD: 7, CXR: 7, BKK: 7, DMK: 7, HKT: 7, CNX: 7, USM: 7, KBV: 7, CGK: 7, PNH: 7, REP: 7, VTE: 7,
+    RGN: 6.5, DAC: 6, KTM: 5.75, DEL: 5.5, BOM: 5.5, CMB: 5.5, MLE: 5, DXB: 4, AUH: 4, DOH: 3, IST: 3, NRT: 9, HND: 9, KIX: 9, ICN: 9, GMP: 9, LHR: 0, CDG: 1, FRA: 1, AMS: 1, SYD: 11, MEL: 11, BNE: 10 };
+  const parseDur = s => { const m = (s || '').match(/(\d{1,2})\s*h\D*?(\d{1,2})?\s*m?/i); return m ? +m[1] * 60 + (+m[2] || 0) : null; };
+  const fmtDur = m => `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}`;
+  // From local departure/arrival times: real flight length and the clock change on landing
+  function flightInfo(f) {
+    if (!f.depTime || !f.arrTime) return null;
+    const dayGap = f.arrDate && f.depDate ? Math.round((new Date(f.arrDate + 'T00:00:00') - new Date(f.depDate + 'T00:00:00')) / 864e5) : 0;
+    const wall = toMin(f.arrTime) + dayGap * 1440 - toMin(f.depTime);
+    let dur = parseDur(f.duration), shift = null;
+    const a = AIRPORT_TZ[(f.from || '').toUpperCase()], b = AIRPORT_TZ[(f.to || '').toUpperCase()];
+    if (dur != null) shift = wall - dur;
+    else if (a != null && b != null) { shift = (b - a) * 60; dur = wall - shift; }
+    if (shift != null) shift = Math.round(shift / 15) * 15;
+    return { dur, shift };
+  }
+  const shiftText = s => !s ? '' : `clocks go ${s < 0 ? 'back' : 'forward'} ${Math.abs(s) % 60 ? fmtDur(Math.abs(s)) : Math.abs(s) / 60 + ' hr'}`;
+
   /* ---------- bookings ---------- */
   const BOOK = {
     flight: { label: 'Flight', icon: 'plane', c: '#5b7fa6', bg: '#ecf1f7', desc: 'Airline, route, times, seats', fields: [
@@ -666,6 +747,7 @@
       [['from', 'From', 'text', 'e.g. KUL'], ['to', 'To', 'text', 'e.g. PQC']],
       [['depDate', 'Departure date', 'date'], ['depTime', 'Departure time', 'time']],
       [['arrDate', 'Arrival date', 'date'], ['arrTime', 'Arrival time', 'time']],
+      ['duration', 'Flight time', 'text', 'e.g. 1h 50m (works out the time change)'],
       [['seats', 'Seats', 'text', 'e.g. 27E, 27F'], ['baggage', 'Baggage', 'text', 'e.g. 20kg checked']],
       ['notes', 'Notes', 'textarea', 'Terminal, meals, anything else'],
     ] },
@@ -687,7 +769,7 @@
     ] },
   };
   const bForm = $('#bookForm');
-  let bEditing = null, bKind = 'flight', bQueue = [];
+  let bEditing = null, bKind = 'flight', bQueue = [], bFilter = 'all';
 
   const shortDate = iso => iso ? fmtDate(iso, { weekday: 'short', day: 'numeric', month: 'short' }) : '';
   const nights = (a, b) => (a && b) ? Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5) : 0;
@@ -695,6 +777,7 @@
 
   function renderBookings() {
     const list = $('#bookList'), all = trip.bookings;
+    $('#bookFilters').hidden = !all.length;
     if (!all.length) {
       list.innerHTML = `<div class="pempty"><div class="big" style="color:var(--sea)">${icon('plane')}</div><p><b>No bookings yet</b></p><p class="muted">Add flights and stays by hand, or upload a confirmation PDF.</p><button type="button" class="btn" id="bookBegin">Add booking</button></div>`;
       $('#bookBegin').onclick = () => openBooking(null);
@@ -702,7 +785,14 @@
     }
     const sortKey = b => (b.depDate || b.inDate || b.date || '9') + (b.depTime || b.inTime || b.time || '');
     const groups = [['flight', 'Flights'], ['stay', 'Stays'], ['other', 'Other']];
+    // Filter cards: All first, then only the kinds that exist
+    const kinds = groups.filter(([k]) => all.some(b => b.kind === k));
+    if (bFilter !== 'all' && !kinds.some(([k]) => k === bFilter)) bFilter = 'all';
+    $('#bookFilters').innerHTML = [['all', 'All', all.length], ...kinds.map(([k, l]) => [k, l, all.filter(b => b.kind === k).length])]
+      .map(([k, l, n]) => `<button type="button" data-f="${k}" class="${k === bFilter ? 'on' : ''}"><b>${l}</b><span>${n}</span></button>`).join('');
+    $('#bookFilters').querySelectorAll('button').forEach(btn => btn.onclick = () => { bFilter = btn.dataset.f; renderBookings(); });
     list.innerHTML = groups.map(([k, label]) => {
+      if (bFilter !== 'all' && bFilter !== k) return '';
       const items = all.filter(b => b.kind === k).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
       return items.length ? `<div class="bsect">${label}</div>${items.map(bookingCard).join('')}` : '';
     }).join('');
@@ -818,8 +908,16 @@
     };
     const gq = q => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
     if (b.kind === 'flight') {
-      add(b.depDate, b.depTime, { type: 'transport', title: `Flight ${b.flightNo || ''}${b.to ? ' to ' + b.to : ''}`.replace(/\s+/g, ' ').trim(), notes: [b.ref && 'Ref ' + b.ref, b.seats && 'Seats ' + b.seats].filter(Boolean).join(' · ') }, 'departure');
-      add(b.arrDate || b.depDate, b.arrTime, { type: 'transport', title: `Land in ${b.toCity || b.to || 'destination'}`, notes: b.flightNo || '' }, 'arrival');
+      // One block from departure to landing, each end in its own local time
+      const fi = flightInfo(b) || {};
+      const sameDay = !b.arrDate || b.arrDate === b.depDate;
+      const end = sameDay && b.arrTime && toMin(b.arrTime) > toMin(b.depTime) ? b.arrTime : '';
+      add(b.depDate, b.depTime, {
+        type: 'transport', end,
+        title: ['Flight', b.flightNo, b.from && b.to ? `· ${b.from} → ${b.to}` : b.to ? `to ${b.to}` : ''].filter(Boolean).join(' '),
+        notes: [b.ref && 'Ref ' + b.ref, b.seats && 'Seats ' + b.seats].filter(Boolean).join(' · '),
+        flight: { from: b.from || '', to: b.to || '', arrTime: b.arrTime || '', arrDate: sameDay ? '' : b.arrDate, dur: fi.dur ?? null, shift: fi.shift ?? null },
+      }, 'flight');
     } else if (b.kind === 'stay') {
       const maps = (b.name || b.address) ? gq([b.name, b.address].filter(Boolean).join(', ')) : '';
       add(b.inDate, b.inTime || '14:00', { type: 'rest', title: `Check in · ${b.name || 'Stay'}`, maps, notes: b.ref ? 'Booking ID ' + b.ref : '' }, 'check-in');
@@ -888,6 +986,7 @@
   let lastView = null;
   function route() {
     const v = currentView();
+    if (openEl) hide();
     VIEWS.forEach(x => document.getElementById('v-' + x).classList.toggle('on', x === v));
     document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.v === v));
     renderHeader();
@@ -961,7 +1060,8 @@
     const copy = normTrip(structuredClone(menuTrip), db.trips.length);
     copy.id = uid(); copy.title = `${menuTrip.title} (copy)`; copy.color = db.trips.length % PALETTE.length;
     copy.days.forEach(d => { d.id = uid(); d.items.forEach(i => i.id = uid()); });
-    copy.packing.sections.forEach(s => { s.id = uid(); s.items.forEach(i => { i.id = uid(); i.done = false; }); });
+    copy.packing.travelers.forEach(tr => { tr.id = uid(); tr.sections.forEach(s => { s.id = uid(); s.items.forEach(i => { i.id = uid(); i.done = false; }); }); });
+    copy.packing.cur = copy.packing.travelers[0]?.id;
     copy.bookings.forEach(b => { b.id = uid(); b.itemIds = []; });
     copy.days.forEach(d => d.items.forEach(i => delete i.bookingId));
     db.trips.push(copy); save(); hide(); renderTrips(); toast('Trip duplicated');
@@ -994,7 +1094,7 @@
   };
   $('#promptInput').addEventListener('input', e => e.target.classList.remove('invalid'));
 
-  /* ---------- packing ---------- */
+  /* ---------- packing: one list per traveller ---------- */
   const STARTER = [
     ['Documents & money', ['Passports', 'Travel insurance', 'Booking confirmations', 'Some local cash', 'Main + backup card']],
     ['Medicine', ['Paracetamol', 'Stomach medicine', 'Plasters', 'Insect repellent', 'Any regular prescriptions']],
@@ -1002,25 +1102,48 @@
     ['Tech', ['Phone charger', 'Power bank', 'Travel adapter', 'eSIM / data plan']],
     ['Clothes', ['Tops', 'Bottoms', 'Underwear', 'Sleepwear', 'Light jacket']],
   ];
-  const mkSection = (name, kind, items = []) => ({ id: uid(), name, kind, items: items.map(text => ({ id: uid(), text, done: false })) });
+  const mkSection = (name, items = []) => ({ id: uid(), name, items: items.map(text => ({ id: uid(), text, done: false })) });
+  const curTraveler = () => { const P = trip.packing; return P.travelers.find(t => t.id === P.cur) || P.travelers[0]; };
+  const countOf = tr => { const all = tr.sections.flatMap(s => s.items); return [all.filter(i => i.done).length, all.length]; };
+
   function renderPacking() {
-    const P = trip.packing, list = $('#packList');
-    const all = P.sections.flatMap(s => s.items), done = all.filter(i => i.done).length;
-    $('#packBar').style.width = all.length ? `${done / all.length * 100}%` : '0';
-    $('#packTxt').textContent = all.length ? `${done} of ${all.length} packed` : 'Nothing on the list yet';
-    $('.packtop').hidden = !P.sections.length;
-    if (!P.sections.length) {
-      list.innerHTML = `<div class="pempty"><div class="big" style="color:var(--sea)">${icon('bag')}</div><p><b>No packing list yet</b></p><p class="muted">Start from a list, or build your own.</p><button type="button" class="btn" id="packBegin">Start packing list</button></div>`;
+    const P = trip.packing, me = curTraveler();
+    P.cur = me.id;
+    // traveller tabs
+    const tabs = $('#packTabs'); tabs.innerHTML = '';
+    P.travelers.forEach(tr => {
+      const [d, n] = countOf(tr), btn = document.createElement('button');
+      btn.className = tr === me ? 'on' : '';
+      btn.innerHTML = `<b>${esc(tr.name)}</b><span>${n ? `${d}/${n}` : 'empty'}</span>`;
+      btn.onclick = () => { P.cur = tr.id; save(); renderPacking(); };
+      tabs.appendChild(btn);
+    });
+    const add = document.createElement('button');
+    add.className = 'add'; add.textContent = '+ Traveller';
+    add.onclick = () => openPrompt({ title: 'New traveller', placeholder: 'e.g. Jolie', onSave: v => {
+      const tr = { id: uid(), name: v, sections: [] }; P.travelers.push(tr); P.cur = tr.id; save(); renderPacking(); } });
+    tabs.appendChild(add);
+    tabs.querySelector('.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+
+    $('#packName').textContent = me.name;
+    const [done, total] = countOf(me);
+    $('#packBar').style.width = total ? `${done / total * 100}%` : '0';
+    $('#packTxt').textContent = total ? `${done} of ${total} packed` : '';
+    $('.packtop').hidden = !me.sections.length;
+
+    const list = $('#packList');
+    if (!me.sections.length) {
+      list.innerHTML = `<div class="pempty"><div class="big" style="color:var(--sea)">${icon('bag')}</div><p><b>${esc(me.name)}'s list is empty</b></p><p class="muted">Start from a list, copy someone else's, or build your own.</p><button type="button" class="btn" id="packBegin">Start packing list</button></div>`;
       $('#packBegin').onclick = openPackStart;
       return;
     }
     list.innerHTML = '';
-    P.sections.forEach(s => {
+    me.sections.forEach(s => {
       const card = document.createElement('div');
-      card.className = 'pcard' + (s.kind === 'traveler' ? ' trav' : '');
+      card.className = 'pcard';
       const n = s.items.filter(i => i.done).length;
-      card.innerHTML = `<div class="ph"><span class="pi">${icon(s.kind === 'traveler' ? 'user' : 'list')}</span><b>${esc(s.name)}</b><small>${n}/${s.items.length}</small>
-        <button type="button" class="round" aria-label="Section options">${icon('more')}</button></div>`;
+      card.innerHTML = `<div class="ph"><span class="pi">${icon('list')}</span><b>${esc(s.name)}</b><small>${n}/${s.items.length}</small>
+        <button type="button" class="round" aria-label="Category options">${icon('more')}</button></div>`;
       s.items.forEach(it => {
         const row = document.createElement('div');
         row.className = 'prow' + (it.done ? ' done' : '');
@@ -1029,42 +1152,44 @@
         row.querySelector('.del').onclick = () => { s.items = s.items.filter(x => x !== it); save(); renderPacking(); };
         card.appendChild(row);
       });
-      const add = document.createElement('form');
-      add.className = 'padd';
-      add.innerHTML = `${icon('plus')}<input placeholder="${s.kind === 'traveler' ? `Add for ${esc(s.name)}…` : 'Add item…'}" enterkeyhint="done">`;
-      add.onsubmit = e => {
+      const form = document.createElement('form');
+      form.className = 'padd';
+      form.innerHTML = `${icon('plus')}<input placeholder="Add item…" enterkeyhint="done">`;
+      form.onsubmit = e => {
         e.preventDefault();
-        const v = add.querySelector('input').value.trim(); if (!v) return;
+        const v = form.querySelector('input').value.trim(); if (!v) return;
         s.items.push({ id: uid(), text: v, done: false }); save(); renderPacking();
-        const again = [...$('#packList').querySelectorAll('.pcard')][P.sections.indexOf(s)]?.querySelector('.padd input'); again?.focus();
+        $('#packList').querySelectorAll('.pcard')[me.sections.indexOf(s)]?.querySelector('.padd input')?.focus();
       };
-      card.appendChild(add);
+      card.appendChild(form);
       card.querySelector('.ph .round').onclick = () => openPrompt({
-        title: s.kind === 'traveler' ? 'Rename traveller' : 'Rename category', value: s.name,
+        title: 'Rename category', value: s.name,
         onSave: v => { s.name = v; save(); renderPacking(); },
-        onDelete: () => { P.sections = P.sections.filter(x => x !== s); save(); renderPacking(); toast('Removed'); },
+        onDelete: () => { me.sections = me.sections.filter(x => x !== s); save(); renderPacking(); toast('Category removed'); },
       });
       list.appendChild(card);
     });
   }
-  $('#addCat').onclick = () => openPrompt({ title: 'New category', placeholder: 'e.g. Toiletries', onSave: v => { trip.packing.sections.push(mkSection(v, 'category')); save(); renderPacking(); } });
-  $('#addTraveler').onclick = () => openPrompt({ title: 'New traveller', placeholder: 'e.g. Jolie', onSave: v => { trip.packing.sections.push(mkSection(v, 'traveler')); save(); renderPacking(); } });
-  $('#untickAll').onclick = () => { trip.packing.sections.forEach(s => s.items.forEach(i => i.done = false)); save(); renderPacking(); toast('All unticked'); };
+  $('#packEdit').onclick = () => {
+    const P = trip.packing, me = curTraveler();
+    openPrompt({ title: 'Rename traveller', value: me.name,
+      onSave: v => { me.name = v; save(); renderPacking(); },
+      onDelete: P.travelers.length > 1 ? () => { P.travelers = P.travelers.filter(t => t !== me); P.cur = P.travelers[0].id; save(); renderPacking(); toast('Traveller removed'); } : null });
+  };
+  $('#addCat').onclick = () => openPrompt({ title: 'New category', placeholder: 'e.g. Toiletries', onSave: v => { curTraveler().sections.push(mkSection(v)); save(); renderPacking(); } });
+  $('#untickAll').onclick = () => { curTraveler().sections.forEach(s => s.items.forEach(i => i.done = false)); save(); renderPacking(); toast('All unticked'); };
   function openPackStart() {
-    const others = db.trips.filter(t => t !== trip && t.packing.sections.length);
-    const opts = [
-      ['starter', 'Starter list', 'Documents, medicine, beach, tech, clothes'],
-      ...others.map(t => ['copy:' + t.id, `Copy from ${t.title}`, `${t.packing.sections.length} sections · ${t.packing.sections.reduce((n, s) => n + s.items.length, 0)} items`]),
-      ['blank', 'Blank list', 'Add your own categories and travellers'],
-    ];
-    $('#packStartOpts').innerHTML = opts.map(([v, l, d]) => `<button type="button" data-v="${v}">${esc(l)}<small>${esc(d)}</small></button>`).join('');
-    $('#packStartOpts').querySelectorAll('button').forEach(b => b.onclick = () => {
-      const v = b.dataset.v;
-      if (v === 'starter') trip.packing.sections = STARTER.map(([n, items]) => mkSection(n, 'category', items));
-      else if (v.startsWith('copy:')) {
-        const src = db.trips.find(t => t.id === v.slice(5));
-        trip.packing.sections = src.packing.sections.map(s => mkSection(s.name, s.kind, s.items.map(i => i.text)));
-      } else trip.packing.sections = [mkSection('Essentials', 'category')];
+    const me = curTraveler();
+    const here = trip.packing.travelers.filter(t => t !== me && t.sections.length).map(t => ['t:' + t.id, `Copy from ${t.name}`, `${t.sections.length} categories · ${countOf(t)[1]} items`]);
+    const others = db.trips.filter(t => t !== trip).flatMap(t => t.packing.travelers.filter(tr => tr.sections.length).map(tr => ['o:' + t.id + ':' + tr.id, `Copy from ${t.title} · ${tr.name}`, `${countOf(tr)[1]} items`]));
+    const opts = [['starter', 'Starter list', 'Documents, medicine, beach, tech, clothes'], ...here, ...others, ['blank', 'Blank list', 'Add your own categories']];
+    $('#packStartOpts').innerHTML = opts.map(([v, l, d]) => `<button type="button" data-v="${esc(v)}">${esc(l)}<small>${esc(d)}</small></button>`).join('');
+    $('#packStartOpts').querySelectorAll('button').forEach(btn => btn.onclick = () => {
+      const v = btn.dataset.v, clone = src => src.sections.map(s => mkSection(s.name, s.items.map(i => i.text)));
+      if (v === 'starter') me.sections = STARTER.map(([n, items]) => mkSection(n, items));
+      else if (v.startsWith('t:')) me.sections = clone(trip.packing.travelers.find(t => t.id === v.slice(2)));
+      else if (v.startsWith('o:')) { const [, tid, rid] = v.split(':'); me.sections = clone(db.trips.find(t => t.id === tid).packing.travelers.find(t => t.id === rid)); }
+      else me.sections = [mkSection('Essentials')];
       save(); hide(); renderPacking();
     });
     show('#packStart');
@@ -1074,6 +1199,14 @@
   function render() { renderHeader(); renderDays(); renderGrid(); }
   const t = todayISO(), ti = trip.days.findIndex(d => d.date === t);
   if (ti >= 0) cur = ti;
+  if (db.__relink?.length) {
+    db.__relink.forEach(([tid, bid]) => {
+      const t = db.trips.find(x => x.id === tid), b = t?.bookings.find(x => x.id === bid);
+      if (!b) return;
+      const keep = trip; trip = t; unlinkBooking(b); linkBooking(b); trip = keep;
+    });
+    delete db.__relink; save();
+  }
   route();
 
   // service worker (network-first while we build)

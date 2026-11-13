@@ -97,6 +97,7 @@
         depTime: times[0] || '',
         arrDate: short.length > 1 ? short.at(-1) : (depDate || short[0] || ''),
         arrTime: times[1] || '',
+        duration: (() => { const m = sec.match(/\b(\d{1,2})\s*h(?:rs?|ours?)?\s*(\d{1,2})?\s*m?(?:in)?\b/i); return m ? `${+m[1]}h${m[2] ? ' ' + (+m[2]) + 'm' : ''}` : ''; })(),
         seats: seats.join(', '),
         baggage: [bag && `${bag.replace(/\s/g, '')} checked`, carry && `${carry.replace(/\s/g, '')} carry-on`].filter(Boolean).join(' + '),
         notes: terminal,

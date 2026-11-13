@@ -71,16 +71,20 @@
 
   <section class="view" id="v-bookings">
     <div class="tripsbar"><h2 class="sect">Bookings</h2><button type="button" class="btn small" id="addBooking"><svg class="ico"><use href="#i-plus"/></svg>Add booking</button></div>
+    <div class="days filt" id="bookFilters"></div>
     <div id="bookList"></div>
   </section>
 
   <section class="view" id="v-packing">
+    <div class="sticky">
+      <div class="days" id="packTabs"></div>
+      <div class="dayhead"><div><h2 id="packName">Me</h2><div class="sub">Packing list</div></div><button type="button" class="round" id="packEdit" aria-label="Edit traveller"><svg class="ico"><use href="#i-edit"/></svg></button></div>
+    </div>
     <div class="packtop">
       <div class="prog"><i id="packBar"></i></div>
       <div class="progtxt" id="packTxt"></div>
       <div class="packbtns">
-        <button type="button" class="chipbtn" id="addCat"><svg class="ico"><use href="#i-plus"/></svg>Category</button>
-        <button type="button" class="chipbtn" id="addTraveler"><svg class="ico"><use href="#i-user"/></svg>Traveller</button>
+        <button type="button" class="chipbtn" id="addCat">+ Category</button>
         <button type="button" class="chipbtn subtle" id="untickAll">Untick all</button>
       </div>
     </div>
@@ -198,7 +202,17 @@
 <div class="drawer small" id="settings" role="dialog" aria-modal="true">
   <div class="grab"></div>
   <button type="button" class="x" data-close aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
-  <h3>Settings</h3>
+  <h3 id="settingsTitle">Settings</h3>
+  <form id="tripSetForm" autocomplete="off">
+    <label>Trip name<input name="title"></label>
+    <div class="two">
+      <label>Start date<input name="start" type="date"></label>
+      <label>Days<input name="days" type="number" min="1" max="60" inputmode="numeric"></label>
+    </div>
+    <p class="muted setnote" id="setNote">Changing the start date moves every day, with its items. Bookings keep their own dates, so update them in Bookings if they changed too.</p>
+    <div class="err" id="setErr" hidden></div>
+    <div class="actions"><button type="submit" class="btn">Save trip</button></div>
+  </form>
   <div class="flabel">Open places in</div>
   <div class="seg" id="mapsSeg">
     <button type="button" data-v="google">Google Maps</button>

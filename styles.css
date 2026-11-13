@@ -334,3 +334,11 @@ form input.filled,form textarea.filled{background:#fffbea;border-color:#f0dfae}
 .toggle input{width:20px!important;height:20px!important;min-height:0!important;margin:0!important;accent-color:var(--sea);flex:none}
 form textarea{min-height:70px}
 .toggle input{-webkit-appearance:auto!important;appearance:auto!important;border:0!important;padding:0!important}
+.item .m .tz,#vTime .tz{font-size:10px;font-weight:600;letter-spacing:.5px;color:var(--muted);vertical-align:1px}
+.lane .item .m{white-space:normal}
+
+.setnote{font-size:12px;line-height:1.45;margin:-4px 0 12px}
+#tripSetForm{border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:16px}
+.days.filt{margin-top:4px}
+.days.filt button{min-width:0;padding:8px 14px}
+.days.filt button b{font-size:14px}
