@@ -260,7 +260,8 @@
   /* ---------- item drawer ---------- */
   const form = $('#itemForm');
   let editing = null, pickedType = 'activity', pendingStart = '';
-  const PLACEHOLDER = { activity: 'e.g. Beach', meal: 'e.g. Lunch', rest: 'e.g. Hotel', transport: 'e.g. Grab to airport', other: 'e.g. Shopping' };
+  const PLACEHOLDER = { activity: 'e.g. Beach', meal: 'e.g. Lunch', rest: 'Rest', transport: 'e.g. Grab to airport', other: 'e.g. Shopping' };
+  const DEFAULT_TITLE = { rest: 'Rest' };   // used when the title is left empty
 
   // Step 1: card picker
   function renderCards() {
@@ -288,6 +289,7 @@
     badge.innerHTML = icon(pickedType);
     $('#drawerTitle').textContent = editing ? `Edit ${T.label.toLowerCase()}` : `New ${T.label.toLowerCase()}`;
     form.title.placeholder = PLACEHOLDER[pickedType];
+    suggestPlace();
     $('#step2').classList.add('on'); $('#step1').classList.remove('on');
     if (!editing && !form.title.value) setTimeout(() => form.title.focus(), 120);
   }
@@ -314,14 +316,15 @@
     const day = trip.days[cur];
     const data = {
       type: pickedType,
-      title: form.title.value.trim(),
+      title: form.title.value.trim() || DEFAULT_TITLE[pickedType] || '',
       start: form.start.value,
       end: form.end.value,
       maps: normaliseUrl(form.maps.value.trim()),
       place: currentPlace,
       notes: form.notes.value.trim(),
     };
-    if (!data.title || !data.start) return;
+    if (!data.title) { form.title.classList.remove('shake'); void form.title.offsetWidth; form.title.classList.add('shake'); form.title.focus(); toast('Add a title'); return; }
+    if (!data.start) return;
     if (editing) Object.assign(editing, data);
     else day.items.push({ id: uid(), ...data });
     save(); renderGrid();
@@ -347,9 +350,37 @@
     chip.hidden = !p;
     if (p) chip.innerHTML = `${icon('other')}<span><b>${esc(p.name)}</b>${p.address ? `<small>${esc(p.address)}</small>` : ''}</span>
       <button type="button" aria-label="Remove place">${icon('x')}</button>`;
-    chip.querySelector('button')?.addEventListener('click', () => setPlace(null));
+    chip.querySelector('button')?.addEventListener('click', () => { setPlace(null); suggestPlace(); });
     $('#placeQ').closest('.search').hidden = !!p;
+    if (p) $('#placeSuggest').hidden = true;
   }
+  // For a new Rest item, offer the location of the previous Rest item
+  function suggestPlace() {
+    const btn = $('#placeSuggest');
+    btn.hidden = true;
+    if (editing || pickedType !== 'rest' || currentPlace) return;
+    const prev = previousRest();
+    if (!prev) return;
+    const label = prev.place ? prev.place.name : 'Previous map link';
+    btn.innerHTML = `${icon('rest')}<span>Same as before: <b>${esc(label)}</b></span>`;
+    btn.onclick = () => {
+      if (prev.place) setPlace({ ...prev.place });
+      if (prev.maps) { form.maps.value = prev.maps; $('#linkField').hidden = false; $('#showLink').hidden = true; }
+      btn.hidden = true;
+    };
+    btn.hidden = false;
+  }
+  function previousRest() {
+    const before = [];
+    trip.days.forEach((d, di) => d.items.forEach(it => {
+      if (it.type !== 'rest' || !(it.place || it.maps)) return;
+      const isBefore = di < cur || (di === cur && toMin(it.start) <= toMin(pendingStart || '23:59'));
+      before.push({ it, isBefore, key: di * 1440 + toMin(it.start) });
+    }));
+    const pick = before.filter(b => b.isBefore).sort((a, b) => b.key - a.key)[0] || before.sort((a, b) => b.key - a.key)[0];
+    return pick?.it || null;
+  }
+
   // bias results towards places already in this trip
   function biasPoint() {
     const all = trip.days.flatMap(d => d.items).map(i => i.place).filter(Boolean);

@@ -85,7 +85,7 @@
     <h3 id="drawerTitle">New item</h3>
   </div>
   <form id="itemForm" autocomplete="off">
-    <label>Title<input name="title" placeholder="e.g. Beach" required></label>
+    <label>Title<input name="title" placeholder="e.g. Beach"></label>
     <div class="two">
       <label>Start<input name="start" type="time" required></label>
       <label>End <span class="muted">(optional)</span><input name="end" type="time"></label>
@@ -93,12 +93,13 @@
     <div class="field">
       <div class="flabel">Location <span class="muted">(optional)</span></div>
       <div class="chip" id="placeChip" hidden></div>
+      <button type="button" class="suggest" id="placeSuggest" hidden></button>
       <div class="search">
         <input id="placeQ" type="search" placeholder="Search a place, e.g. Kaisun Phu Quoc" autocomplete="off" enterkeyhint="search">
         <div class="results" id="placeResults"></div>
       </div>
     </div>
-    <button type="button" class="linkbtn" id="showLink"><svg class="ico"><use href="#i-link"/></svg>Paste a map link instead</button>
+    <button type="button" class="linkbtn" id="showLink"><svg class="ico"><use href="#i-link"/></svg>Paste A Link Instead</button>
     <label id="linkField" hidden>Map link <span class="muted">(Google Maps, Waze…)</span><input name="maps" type="url" inputmode="url" placeholder="https://"></label>
     <label>Notes <span class="muted">(optional)</span><textarea name="notes" rows="3" placeholder="Booking ref, what to order, reminders…"></textarea></label>
     <div class="actions">
