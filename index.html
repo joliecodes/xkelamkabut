@@ -222,14 +222,14 @@
 </div>
 
 <!-- Booking drawer -->
-<input type="file" id="pdfInput" accept="application/pdf,.pdf" hidden>
+<input type="file" id="pdfInput" accept="application/pdf,.pdf,image/*" hidden>
 <div class="drawer" id="bookDrawer" role="dialog" aria-modal="true">
   <div class="grab"></div>
   <button type="button" class="x" data-close aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
   <div class="step" id="bstep1">
     <h3>Add a booking</h3>
     <div class="cards" id="bcards"></div>
-    <button type="button" class="upload" id="uploadPdf1"><svg class="ico"><use href="#i-upload"/></svg><span><b>Upload a PDF</b><small>Flight or hotel confirmation. Read on your phone, never uploaded.</small></span></button>
+    <button type="button" class="upload" id="uploadPdf1"><svg class="ico"><use href="#i-upload"/></svg><span><b>Upload PDF or screenshot</b><small>Booking confirmations, e-tickets, or a photo of a printed ticket. Read on your phone, never uploaded.</small></span></button>
   </div>
   <div class="step" id="bstep2">
     <div class="stephead">
@@ -237,15 +237,18 @@
       <span class="badge" id="bbadge"></span>
       <h3 id="btitle">New Flight</h3>
     </div>
-    <button type="button" class="upload slim" id="uploadPdf2"><svg class="ico"><use href="#i-upload"/></svg><span><b>Fill in from a PDF</b></span></button>
+    <button type="button" class="upload slim" id="uploadPdf2"><svg class="ico"><use href="#i-upload"/></svg><span><b>Fill in from a PDF or screenshot</b></span></button>
     <div class="bprog" id="bprog" hidden></div>
     <div class="found" id="bfound" hidden></div>
     <form id="bookForm" autocomplete="off">
       <div id="bfields"></div>
       <label class="toggle"><input type="checkbox" id="bsync" checked><span>Add to itinerary</span></label>
-      <div class="actions">
-        <button type="button" class="btn ghost danger" id="bdel">Delete</button>
-        <button type="submit" class="btn">Save</button>
+      <div class="bfoot">
+        <div class="bremind" id="bremind" hidden></div>
+        <div class="actions">
+          <button type="button" class="btn ghost danger" id="bdel">Delete</button>
+          <button type="submit" class="btn" id="bsave">Save</button>
+        </div>
       </div>
     </form>
   </div>

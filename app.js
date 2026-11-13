@@ -868,10 +868,31 @@
         ? `<b>Filled in ${filled} field${filled > 1 ? 's' : ''} from your PDF.</b> Check the highlighted ones before saving.`
         : `<b>Couldn't find details in this PDF.</b> Please fill them in by hand.`;
     }
+    // Arrival before departure on the same day is usually a misread time
+    if (bKind === 'flight' && data.depDate && data.depDate === data.arrDate && data.depTime && data.arrTime && data.arrTime < data.depTime) {
+      bForm.arrTime.classList.add('warn');
+      $('#bfound').hidden = false;
+      $('#bfound').insertAdjacentHTML('beforeend', '<br><b>Check the arrival time:</b> it looks earlier than departure.');
+      bForm.arrTime.addEventListener('input', () => bForm.arrTime.classList.remove('warn'), { once: true });
+    }
+    updateReminder();
     $('#bsync').checked = bEditing ? !!bEditing.itemIds?.length : true;
     $('#bdel').hidden = !bEditing; $('#bdel').textContent = 'Delete'; $('#bdel').dataset.armed = '';
     $('#bstep2').classList.add('on'); $('#bstep1').classList.remove('on');
   }
+  // "Flight 2 of 4 · EK 071 · DXB → CDG · Thu 26 Feb" just above Save, kept in sync with the form
+  function updateReminder() {
+    const many = !bEditing && bTotal > 1, fromPdf = !$('#bfound').hidden, v = n => bForm[n]?.value.trim() || '';
+    const parts = [];
+    if (bKind === 'flight') parts.push(v('flightNo') && `<b>${esc(v('flightNo'))}</b>`, (v('from') || v('to')) && `${esc(v('from') || '?')} → ${esc(v('to') || '?')}`, v('depDate') && shortDate(v('depDate')));
+    else if (bKind === 'stay') parts.push(v('name') && `<b>${esc(v('name'))}</b>`, v('inDate') && `${fmtDate(v('inDate'), { day: 'numeric', month: 'short' })}${v('outDate') ? '–' + fmtDate(v('outDate'), { day: 'numeric', month: 'short' }) : ''}`);
+    else parts.push(v('title') && `<b>${esc(v('title'))}</b>`, v('date') && shortDate(v('date')));
+    const lead = many ? `${BOOK[bKind].label} ${bIndex} of ${bTotal}` : BOOK[bKind].label;
+    $('#bremind').innerHTML = [lead, ...parts.filter(Boolean)].join(' · ');
+    $('#bremind').hidden = !(many || fromPdf);
+    $('#bsave').textContent = many && bIndex < bTotal ? 'Save & next' : 'Save';
+  }
+  $('#bfields').addEventListener('input', () => updateReminder());
   $('#bback').onclick = () => { if (!bEditing) bStep1(); else hide(); };
   $('#addBooking').onclick = () => { bQueue = []; bTotal = 0; openBooking(null); };
 
@@ -971,14 +992,59 @@
     }
     return { text, cols };
   }
+  // Text recognition for screenshots, photos and image-only PDFs (tesseract.js, runs on the phone)
+  let ocrReady = null;
+  function loadOcr() {
+    ocrReady ||= new Promise((res, rej) => {
+      const s = document.createElement('script'); s.src = (window.XKK_OCR || {}).script || 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+      s.onload = () => res(window.Tesseract); s.onerror = () => { ocrReady = null; rej(new Error('OCR failed to load')); };
+      document.head.appendChild(s);
+    });
+    return ocrReady;
+  }
+  async function ocrImages(images, onProgress) {
+    const T = await loadOcr();
+    let done = 0;
+    const worker = await T.createWorker('eng', 1, { ...((window.XKK_OCR || {}).options || {}), logger: m => { if (m.status === 'recognizing text') onProgress((done + m.progress) / images.length); } });
+    let text = '';
+    for (const img of images) { const { data } = await worker.recognize(img); text += data.text + '\n'; done++; }
+    await worker.terminate();
+    return { text, cols: text };
+  }
+  async function pdfPagesToImages(buf) {
+    const lib = await loadPdfJs(), doc = await lib.getDocument({ data: buf }).promise, out = [];
+    for (let p = 1; p <= Math.min(doc.numPages, 5); p++) {
+      const page = await doc.getPage(p), vp = page.getViewport({ scale: 2 });
+      const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+      await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      out.push(c);
+    }
+    return out;
+  }
+  // PDF with text → read directly; image PDF or picture → text recognition first
+  async function fileToText(file, setLabel) {
+    const isPdf = /pdf/i.test(file.type) || /\.pdf$/i.test(file.name);
+    const progress = f => setLabel(`Reading screenshot… ${Math.round(f * 100)}%`);
+    if (isPdf) {
+      setLabel('Reading PDF…');
+      const buf = await file.arrayBuffer();
+      const r = await pdfToText(buf.slice(0));
+      if (r.text.replace(/\s/g, '').length > 40) return r;
+      setLabel('Getting text recognition ready…');
+      return ocrImages(await pdfPagesToImages(buf), progress);
+    }
+    setLabel('Getting text recognition ready…');
+    return ocrImages([file], progress);
+  }
+
   let uploadFrom = null;
   ['uploadPdf1', 'uploadPdf2'].forEach(id => $('#' + id).onclick = () => { uploadFrom = id; $('#pdfInput').value = ''; $('#pdfInput').click(); });
   $('#pdfInput').addEventListener('change', async e => {
     const file = e.target.files[0]; if (!file) return;
     const btn = $('#' + uploadFrom); btn.classList.add('busy');
-    const label = btn.querySelector('b'), was = label.textContent; label.textContent = 'Reading PDF…';
+    const label = btn.querySelector('b'), was = label.textContent;
     try {
-      const r = window.XKKParse.parseBooking(await pdfToText(await file.arrayBuffer()));
+      const r = window.XKKParse.parseBooking(await fileToText(file, t => label.textContent = t));
       const found = r.kind === 'flight' ? r.flights.map(f => ({ kind: 'flight', data: f }))
         : r.kind === 'stay' ? [{ kind: 'stay', data: r.stay }]
         : [{ kind: uploadFrom === 'uploadPdf2' ? bKind : 'other', data: r.other || {} }];
@@ -988,7 +1054,7 @@
       bEditing = null; bPrefillExtra = first.data; bKind = first.kind;
       bStep2(first.data, true);
     } catch (err) {
-      toast("Couldn't read that PDF. Try another, or fill in by hand.");
+      toast(/OCR/.test(err.message) ? 'Text recognition needs an internet connection the first time.' : "Couldn't read that file. Try another, or fill in by hand.");
     } finally { btn.classList.remove('busy'); label.textContent = was; }
   });
 

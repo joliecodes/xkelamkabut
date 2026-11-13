@@ -85,9 +85,10 @@
   }
 
   function bookingRef(t) {
-    const re = /\b(?:booking\s*(?:no|number|ref(?:erence)?|code|id)|confirmation\s*(?:no|number|code)?|PNR|record locator|reservation\s*(?:no|number|code)?)\.?\s*[:#]?\s*\n?\s*(?:[A-Z0-9]{1,3}\/)?([A-Za-z0-9][A-Za-z0-9-]{4,14})\b/gi;
+    const re = /\b(?:booking\s*(?:no|number|ref(?:erence)?|code|id)|confirmation\s*(?:no|number|code)?|PNR|record locator|reservation\s*(?:no|number|code)?)\b\.?\s*[:#]?\s*\n?\s*(?:[A-Z0-9]{1,3}\/)?([A-Za-z0-9][A-Za-z0-9-]{4,14})\b/gi;
     for (const m of t.matchAll(re)) if (/^[A-Z0-9-]+$/.test(m[1]) && /\d|^[A-Z]{5,8}$/.test(m[1])) return m[1];
-    return '';
+    const pnr = t.match(/booking\s*reference\s*(?:\(PNR\))?[^\n]*\n\s*([A-Z0-9]{5,8})\b/i);
+    return pnr && /^[A-Z0-9]+$/.test(pnr[1]) ? pnr[1] : '';
   }
 
   /* ---------- flights ---------- */
@@ -108,11 +109,16 @@
     // otherwise headings holding a full date ("Depart: Monday, 30 November 2026")
     const lines = text.split('\n');
     let heads = [];
-    lines.forEach((l, i) => { if (/^\s*(leg|segment|sector)\s*\d+/i.test(l) || /^\s*flight\s*\d+\s*of\s*\d+/i.test(l)) heads.push(i); });
+    lines.forEach((l, i) => {
+      if (/^\s*(leg|segment|sector)\s*\d+/i.test(l) || /^\s*flight\s*\d+\s*of\s*\d+/i.test(l)
+        || /^\s*(outbound|inbound|onward|return|departing|returning)\s+flight\b.*\([A-Z]{3}\)/i.test(l)) heads.push(i);
+    });
     if (!heads.length) lines.forEach((l, i) => {
       if (/^\s*(depart(?:ure)?|return|outbound|inbound|onward|flight\s*\d)\b/i.test(l) && DATE_RE.test(l) && /\d{4}/.test(l)) heads.push(i);
     });
-    let sections = heads.map((h, k) => lines.slice(h, heads[k + 1] ?? lines.length).join('\n'));
+    // A section ends at the next heading, or where passenger / payment details begin
+    const stopAt = (from, to) => { const j = lines.slice(from + 1, to).findIndex(l => /^\s*(passenger\s*details|payment\s*(summary|details)|fare\s*(details|information|calculation)|price\s*details|add-ons)\b/i.test(l)); return j < 0 ? to : from + 1 + j; };
+    let sections = heads.map((h, k) => lines.slice(h, stopAt(h, heads[k + 1] ?? lines.length)).join('\n'));
 
     // Fallback: no headings, so cut around each flight number
     if (!sections.length) {
@@ -131,18 +137,18 @@
     let flights = sections.map((sec, k) => {
       const secLines = sec.split('\n');
       const head = secLines[0];
-      const body = secLines.filter(l => !/validity|not (before|after)|booking date|issued/i.test(l)).join('\n');
+      const body = secLines.filter(l => !/validity|not (before|after)|booking date|issued|birth|\bDOB\b/i.test(l)).join('\n');
       const fn = [...sec.matchAll(flightNoRe)].find(m => !/^\d+$/.test(m[1]) && !/^GMT/i.test(sec.slice(Math.max(0, m.index - 3), m.index + 3)));
       const airline = (sec.match(airlineRe) || [])[1] || '';
       // "Check-in at" layouts list check-in time first, then departure, then arrival
-      const hasCheckin = /check[- ]?in\s*(at|time|opens|closes)/i.test(sec);
+      const hasCheckin = /check[- ]?in\s*(?:at|time)\b/i.test(sec);
       const times = [...body.matchAll(/\b(\d{1,2}:\d{2}\s*(?:am|pm)?)/gi)].map(m => time24(m[1]));
       const off = hasCheckin && times.length >= 3 ? 1 : 0;
       const dates = [...body.matchAll(new RegExp(DATE_RE.source, 'gi'))].map(m => parseDate(m[1], year)).filter(Boolean);
       const headDate = /\d{4}/.test(head) ? parseDate(head, year) : '';
       const depDate = headDate || dates[hasCheckin && dates.length >= 2 ? 1 : 0] || '';
       // Route from the heading: "City (KUL) to City (DXB)"
-      const hr = head.match(/([A-Za-z .'-]+?)\s*\(([A-Z]{3})\)\s*(?:to|→|-|–)\s*([A-Za-z .'-]+?)\s*\(([A-Z]{3})\)/);
+      const hr = head.match(/([A-Za-z .'-]+?)\s*\(([A-Z]{3})\)\s*(?:to|→|->|>|-|–)\s*([A-Za-z .'-]+?)\s*\(([A-Z]{3})\)/);
       const pair = hr ? [hr[2], hr[4]] : (pairs[k] || []);
       const cityLines = secLines.filter(l => /^\s*\d{1,2}:\d{2}/.test(l)).map(l => clean(l.replace(/^\s*(\d{1,2}:\d{2}\s*(am|pm)?\s*)+/i, '')));
       const terminal = (sec.match(/terminal\s*\w+/i) || [])[0] || '';
@@ -154,7 +160,7 @@
         flightNo: fn ? `${fn[1]} ${fn[2]}` : '',
         ref,
         from: pair[0] || '', to: pair[1] || '',
-        fromCity: hr ? clean(hr[1].replace(/^.*\|/, '')) : (cityLines[0] || ''),
+        fromCity: hr ? clean(hr[1].replace(/^.*\|/, '').replace(/^\s*(outbound|inbound|onward|return|departing|returning)\s+flight\s*/i, '')) : (cityLines[0] || ''),
         toCity: hr ? clean(hr[3]) : (cityLines[1] || ''),
         depDate,
         depTime: times[off] || '',
