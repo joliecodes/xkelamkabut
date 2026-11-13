@@ -237,3 +237,56 @@ button.map{border:0;cursor:pointer;font-family:inherit}
 .vlinks .btn.primary{display:block}
 .linkbtn.as-head{color:var(--ink);cursor:default;padding-bottom:8px;opacity:1}
 .linkbtn.as-head .ico{color:var(--sea)}
+
+/* ---------- trips home ---------- */
+.tripsbar{display:flex;align-items:center;justify-content:space-between;margin:18px 2px 10px}
+.sect{font-size:20px;font-weight:600;letter-spacing:-.01em}
+.btn.small{flex:none;display:inline-flex;align-items:center;gap:6px;padding:9px 14px;font-size:14px;border-radius:99px}
+.btn.small .ico{width:16px;height:16px}
+.tcard{position:relative;display:flex;gap:14px;align-items:center;background:#fff;border-radius:16px;box-shadow:0 2px 10px rgba(36,50,58,.06);padding:14px;margin-bottom:10px;cursor:pointer;overflow:hidden}
+.tcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--c)}
+.tcard .tc-ic{width:46px;height:46px;border-radius:13px;background:var(--bg);color:var(--c);display:grid;place-items:center;flex:none;margin-left:4px}
+.tcard .tc-ic .ico{width:22px;height:22px}
+.tcard .tc-b{flex:1;min-width:0}
+.tcard b{display:block;font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tcard small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.tcard .when{display:inline-block;margin-top:6px;font-size:12px;font-weight:600;color:var(--c);background:var(--bg);border-radius:99px;padding:3px 9px}
+.tcard.cur{box-shadow:0 0 0 2px var(--c),0 2px 10px rgba(36,50,58,.06)}
+.tcard.past{opacity:.6}
+.tcard .round{background:#f6f3ee}
+.subhead{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;color:var(--muted);margin:18px 4px 8px}
+.menu{display:flex;flex-direction:column;gap:8px}
+.menu button{border:0;background:#f6f3ee;border-radius:12px;padding:14px;text-align:left;font-size:15px;font-weight:600;cursor:pointer}
+.menu button.danger{color:#c4513a}
+.menu button small{display:block;font-weight:400;color:var(--muted);font-size:12px;margin-top:2px}
+
+/* ---------- packing ---------- */
+.packtop{margin:16px 2px 10px}
+.prog{height:7px;background:var(--line);border-radius:9px;overflow:hidden}
+.prog i{display:block;height:100%;width:0;background:var(--sea);transition:width .3s}
+.progtxt{font-size:13px;color:var(--muted);margin:6px 0 10px}
+.packbtns{display:flex;gap:8px;flex-wrap:wrap}
+.chipbtn{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink)}
+.chipbtn .ico{width:15px;height:15px;color:var(--sea)}
+.chipbtn.subtle{margin-left:auto}
+.pcard{background:#fff;border-radius:16px;box-shadow:0 2px 10px rgba(36,50,58,.06);padding:12px 14px 6px;margin-bottom:12px}
+.pcard .ph{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.pcard .ph .pi{width:30px;height:30px;border-radius:9px;background:#eaf5f5;color:var(--sea);display:grid;place-items:center;flex:none}
+.pcard.trav .ph .pi{background:#fcefea;color:var(--coral)}
+.pcard .ph .pi .ico{width:16px;height:16px}
+.pcard .ph b{flex:1;font-size:16px;font-weight:600}
+.pcard .ph small{color:var(--muted);font-size:12px;font-weight:600}
+.pcard .ph .round{width:32px;height:32px;background:none}
+.pcard .ph .round .ico{width:18px;height:18px;color:var(--muted)}
+.prow{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px dashed var(--line)}
+.prow label{flex:1;display:flex;gap:12px;align-items:center;font-size:15px;cursor:pointer;min-width:0}
+.prow input{width:20px;height:20px;accent-color:var(--sea);flex:none;margin:0}
+.prow.done label span{color:var(--muted);text-decoration:line-through}
+.prow .del{border:0;background:none;color:#c9c2b6;cursor:pointer;padding:4px;display:grid;place-items:center}
+.prow .del .ico{width:14px;height:14px}
+.padd{display:flex;align-items:center;gap:8px;padding:6px 0 8px}
+.padd .ico{width:16px;height:16px;color:var(--muted);flex:none;margin-left:2px}
+.padd input{flex:1;border:0;outline:none;font-size:15px;padding:8px 0;background:none;min-width:0}
+.pempty{text-align:center;padding:40px 20px}
+.pempty .btn{display:inline-block;width:auto;padding:12px 22px;margin-top:14px}
+.tabs a{font-size:10.5px}

@@ -26,7 +26,7 @@
 
   const it = (type, start, title, extra = {}) => ({ id: uid(), type, start, end: '', title, maps: '', notes: '', ...extra });
   const SAMPLE = {
-    title: 'Phu Quoc',
+    title: 'Example: Phu Quoc',
     days: [
       { id: uid(), date: '2026-11-30', label: 'Arrive', items: [
         it('transport', '13:35', 'Land in Phu Quoc', { notes: 'AK 545' }),
@@ -67,9 +67,34 @@
     ],
   };
 
-  let trip = store.load() || structuredClone(SAMPLE);
+  /* ---------- trips database ---------- */
+  // v2 keeps every trip in one record. The old single-trip key is read once
+  // (to carry over existing data) and never deleted.
+  const DBKEY = 'xkk-db-v2';
+  const PALETTE = [['#2a8c95', '#eaf5f5'], ['#e07a5f', '#fcefea'], ['#5b7fa6', '#ecf1f7'], ['#9a6fb0', '#f3edf7'], ['#c4902e', '#fbf4e4'], ['#6a9e5b', '#eef5ea']];
+  const normTrip = (t, i) => {
+    t.id ||= uid();
+    if (t.color == null) t.color = i % PALETTE.length;
+    t.days ||= [];
+    t.packing ||= { sections: [] };
+    return t;
+  };
+  function loadDb() {
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(DBKEY)); } catch (e) {}
+    if (!d || !Array.isArray(d.trips)) {
+      const old = store.load();
+      d = { trips: [old || structuredClone(SAMPLE)], current: null };
+    }
+    d.trips.forEach(normTrip);
+    if (!d.trips.some(t => t.id === d.current)) d.current = d.trips[0]?.id || null;
+    return d;
+  }
+  let db = loadDb();
+  let trip = db.trips.find(t => t.id === db.current);
   let cur = 0;
-  const save = () => store.save(trip);
+  const save = () => { try { localStorage.setItem(DBKEY, JSON.stringify(db)); } catch (e) {} };
+  save();
 
   /* ---------- helpers ---------- */
   const fmtDate = (iso, opts) => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', opts) : '';
@@ -88,6 +113,15 @@
 
   /* ---------- header ---------- */
   function renderHeader() {
+    const onTrips = currentView() === 'trips';
+    $('#tripTitle').contentEditable = String(!onTrips);
+    $('#kicker').textContent = onTrips ? 'xkelamkabut' : 'xkelamkabut · trip';
+    if (onTrips) {
+      $('#tripTitle').textContent = 'My trips';
+      $('#tripDates').textContent = `${db.trips.length} trip${db.trips.length === 1 ? '' : 's'} · tak kelam-kabut`;
+      document.title = 'xkelamkabut';
+      return;
+    }
     $('#tripTitle').textContent = trip.title || 'My trip';
     const ds = trip.days.map(d => d.date).filter(Boolean).sort();
     $('#tripDates').textContent = ds.length
@@ -95,7 +129,7 @@
       : 'Tap + Add Day to start';
     document.title = `${trip.title} · xkelamkabut`;
   }
-  $('#tripTitle').addEventListener('blur', e => { trip.title = e.target.textContent.trim() || 'My trip'; save(); renderHeader(); });
+  $('#tripTitle').addEventListener('blur', e => { if (currentView() === 'trips') return; trip.title = e.target.textContent.trim() || 'My trip'; save(); renderHeader(); });
   $('#tripTitle').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
 
   /* ---------- day tabs ---------- */
@@ -621,19 +655,195 @@
   document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
 
   /* ---------- routing ---------- */
-  const VIEWS = ['itinerary', 'bookings'];
+  const VIEWS = ['trips', 'itinerary', 'bookings', 'packing'];
+  function currentView() { const h = location.hash.slice(1); return VIEWS.includes(h) ? h : 'trips'; }
+  let lastView = null;
   function route() {
-    const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'itinerary';
+    const v = currentView();
     VIEWS.forEach(x => document.getElementById('v-' + x).classList.toggle('on', x === v));
     document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.v === v));
+    renderHeader();
+    if (v === 'trips') renderTrips();
+    if (v === 'packing') renderPacking();
+    if (v === 'itinerary' && lastView !== 'itinerary') { renderDays(); renderGrid(); requestAnimationFrame(scrollToStart); }
+    if (v !== 'itinerary') scrollTo(0, 0);
+    lastView = v;
   }
   addEventListener('hashchange', route);
+
+  /* ---------- trips home ---------- */
+  const tripRange = t => { const ds = t.days.map(d => d.date).filter(Boolean).sort(); return [ds[0], ds.at(-1)]; };
+  function whenLabel(t) {
+    const [a, b] = tripRange(t), today = todayISO();
+    if (!a) return 'No dates yet';
+    if (today < a) { const n = Math.round((new Date(a + 'T00:00:00') - new Date(today + 'T00:00:00')) / 864e5); return n === 1 ? 'Tomorrow!' : `${n} days to go`; }
+    if (today <= b) return 'Happening now';
+    return 'Done';
+  }
+  function renderTrips() {
+    const list = $('#tripList'), today = todayISO();
+    const sorted = [...db.trips].sort((x, y) => (tripRange(x)[0] || '9').localeCompare(tripRange(y)[0] || '9'));
+    const upcoming = sorted.filter(t => !tripRange(t)[1] || tripRange(t)[1] >= today);
+    const past = sorted.filter(t => tripRange(t)[1] && tripRange(t)[1] < today).reverse();
+    const card = t => {
+      const [c, bg] = PALETTE[t.color % PALETTE.length], [a, b] = tripRange(t);
+      const dates = a ? `${fmtDate(a, { day: 'numeric', month: 'short' })} – ${fmtDate(b, { day: 'numeric', month: 'short', year: 'numeric' })}` : '';
+      return `<div class="tcard${t.id === db.current ? ' cur' : ''}${past.includes(t) ? ' past' : ''}" data-id="${t.id}" style="--c:${c};--bg:${bg}">
+        <span class="tc-ic">${icon('map')}</span>
+        <span class="tc-b"><b>${esc(t.title || 'My trip')}</b><small>${dates}${dates ? ' · ' : ''}${t.days.length} day${t.days.length === 1 ? '' : 's'}</small><span class="when">${whenLabel(t)}</span></span>
+        <button type="button" class="round" data-menu="${t.id}" aria-label="Trip options">${icon('more')}</button></div>`;
+    };
+    list.innerHTML = (upcoming.length ? upcoming.map(card).join('') : '<p class="muted" style="padding:8px 4px">No upcoming trips. Tap New Trip to start one.</p>')
+      + (past.length ? `<div class="subhead">Past trips</div>${past.map(card).join('')}` : '');
+    list.querySelectorAll('.tcard').forEach(el => el.addEventListener('click', e => {
+      if (e.target.closest('[data-menu]')) { openTripMenu(e.target.closest('[data-menu]').dataset.menu); return; }
+      openTrip(el.dataset.id);
+    }));
+  }
+  function openTrip(id) {
+    db.current = id; trip = db.trips.find(t => t.id === id); save();
+    const ti = trip.days.findIndex(d => d.date === todayISO()); cur = ti >= 0 ? ti : 0;
+    lastView = null;
+    location.hash = '#itinerary';
+    if (currentView() === 'itinerary') route();
+  }
+
+  // New trip
+  const ntf = $('#newTripForm');
+  $('#newTripBtn').onclick = () => { ntf.title.value = ''; ntf.start.value = todayISO(); ntf.days.value = 3; show('#newTrip'); };
+  ntf.addEventListener('submit', e => {
+    e.preventDefault();
+    const n = Math.max(1, Math.min(30, +ntf.days.value || 1));
+    const t = normTrip({ title: ntf.title.value.trim() || 'New trip', days: Array.from({ length: n }, (_, i) => ({ id: uid(), date: addDays(ntf.start.value || todayISO(), i), label: '', items: [] })) }, db.trips.length);
+    db.trips.push(t); save(); hide(); toast('Trip created');
+    openTrip(t.id);
+  });
+
+  // Trip menu
+  let menuTrip = null;
+  function openTripMenu(id) {
+    menuTrip = db.trips.find(t => t.id === id);
+    $('#tripMenuTitle').textContent = menuTrip.title || 'Trip';
+    $('#tmDelete').textContent = 'Delete trip'; $('#tmDelete').dataset.armed = '';
+    show('#tripMenu');
+  }
+  $('#tmRename').onclick = () => openPrompt({ title: 'Rename trip', value: menuTrip.title, onSave: v => { menuTrip.title = v || 'My trip'; save(); renderTrips(); } });
+  $('#tmDuplicate').onclick = () => {
+    const copy = normTrip(structuredClone(menuTrip), db.trips.length);
+    copy.id = uid(); copy.title = `${menuTrip.title} (copy)`; copy.color = db.trips.length % PALETTE.length;
+    copy.days.forEach(d => { d.id = uid(); d.items.forEach(i => i.id = uid()); });
+    copy.packing.sections.forEach(s => { s.id = uid(); s.items.forEach(i => { i.id = uid(); i.done = false; }); });
+    db.trips.push(copy); save(); hide(); renderTrips(); toast('Trip duplicated');
+  };
+  $('#tmDelete').onclick = e => {
+    const b = e.currentTarget;
+    if (db.trips.length === 1) { toast('Create another trip first'); return; }
+    if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Tap again to delete for good'; return; }
+    db.trips = db.trips.filter(t => t !== menuTrip);
+    if (db.current === menuTrip.id) { db.current = db.trips[0].id; trip = db.trips[0]; cur = 0; }
+    save(); hide(); renderTrips(); renderHeader(); toast('Trip deleted');
+  };
+
+  /* ---------- generic name prompt ---------- */
+  let promptCfg = null;
+  function openPrompt(cfg) {
+    promptCfg = cfg;
+    $('#promptTitle').textContent = cfg.title;
+    $('#promptInput').value = cfg.value || '';
+    $('#promptInput').placeholder = cfg.placeholder || '';
+    $('#promptDelete').hidden = !cfg.onDelete; $('#promptDelete').textContent = 'Delete'; $('#promptDelete').dataset.armed = '';
+    show('#promptDrawer');
+    setTimeout(() => $('#promptInput').focus(), 260);
+  }
+  $('#promptForm').addEventListener('submit', e => { e.preventDefault(); const v = $('#promptInput').value.trim(); if (!v && !promptCfg.allowEmpty) { flagError($('#promptInput')); return; } hide(); promptCfg.onSave(v); });
+  $('#promptDelete').onclick = e => {
+    const b = e.currentTarget;
+    if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Tap to confirm'; return; }
+    hide(); promptCfg.onDelete();
+  };
+  $('#promptInput').addEventListener('input', e => e.target.classList.remove('invalid'));
+
+  /* ---------- packing ---------- */
+  const STARTER = [
+    ['Documents & money', ['Passports', 'Travel insurance', 'Booking confirmations', 'Some local cash', 'Main + backup card']],
+    ['Medicine', ['Paracetamol', 'Stomach medicine', 'Plasters', 'Insect repellent', 'Any regular prescriptions']],
+    ['Beach', ['Swimwear', 'Sunscreen', 'Hat', 'Sunglasses', 'Waterproof phone pouch', 'Beach towel']],
+    ['Tech', ['Phone charger', 'Power bank', 'Travel adapter', 'eSIM / data plan']],
+    ['Clothes', ['Tops', 'Bottoms', 'Underwear', 'Sleepwear', 'Light jacket']],
+  ];
+  const mkSection = (name, kind, items = []) => ({ id: uid(), name, kind, items: items.map(text => ({ id: uid(), text, done: false })) });
+  function renderPacking() {
+    const P = trip.packing, list = $('#packList');
+    const all = P.sections.flatMap(s => s.items), done = all.filter(i => i.done).length;
+    $('#packBar').style.width = all.length ? `${done / all.length * 100}%` : '0';
+    $('#packTxt').textContent = all.length ? `${done} of ${all.length} packed` : 'Nothing on the list yet';
+    $('.packtop').hidden = !P.sections.length;
+    if (!P.sections.length) {
+      list.innerHTML = `<div class="pempty"><div class="big" style="color:var(--sea)">${icon('bag')}</div><p><b>No packing list yet</b></p><p class="muted">Start from a list, or build your own.</p><button type="button" class="btn" id="packBegin">Start packing list</button></div>`;
+      $('#packBegin').onclick = openPackStart;
+      return;
+    }
+    list.innerHTML = '';
+    P.sections.forEach(s => {
+      const card = document.createElement('div');
+      card.className = 'pcard' + (s.kind === 'traveler' ? ' trav' : '');
+      const n = s.items.filter(i => i.done).length;
+      card.innerHTML = `<div class="ph"><span class="pi">${icon(s.kind === 'traveler' ? 'user' : 'list')}</span><b>${esc(s.name)}</b><small>${n}/${s.items.length}</small>
+        <button type="button" class="round" aria-label="Section options">${icon('more')}</button></div>`;
+      s.items.forEach(it => {
+        const row = document.createElement('div');
+        row.className = 'prow' + (it.done ? ' done' : '');
+        row.innerHTML = `<label><input type="checkbox" ${it.done ? 'checked' : ''}><span>${esc(it.text)}</span></label><button type="button" class="del" aria-label="Remove">${icon('x')}</button>`;
+        row.querySelector('input').onchange = e => { it.done = e.target.checked; save(); renderPacking(); };
+        row.querySelector('.del').onclick = () => { s.items = s.items.filter(x => x !== it); save(); renderPacking(); };
+        card.appendChild(row);
+      });
+      const add = document.createElement('form');
+      add.className = 'padd';
+      add.innerHTML = `${icon('plus')}<input placeholder="${s.kind === 'traveler' ? `Add for ${esc(s.name)}…` : 'Add item…'}" enterkeyhint="done">`;
+      add.onsubmit = e => {
+        e.preventDefault();
+        const v = add.querySelector('input').value.trim(); if (!v) return;
+        s.items.push({ id: uid(), text: v, done: false }); save(); renderPacking();
+        const again = [...$('#packList').querySelectorAll('.pcard')][P.sections.indexOf(s)]?.querySelector('.padd input'); again?.focus();
+      };
+      card.appendChild(add);
+      card.querySelector('.ph .round').onclick = () => openPrompt({
+        title: s.kind === 'traveler' ? 'Rename traveller' : 'Rename category', value: s.name,
+        onSave: v => { s.name = v; save(); renderPacking(); },
+        onDelete: () => { P.sections = P.sections.filter(x => x !== s); save(); renderPacking(); toast('Removed'); },
+      });
+      list.appendChild(card);
+    });
+  }
+  $('#addCat').onclick = () => openPrompt({ title: 'New category', placeholder: 'e.g. Toiletries', onSave: v => { trip.packing.sections.push(mkSection(v, 'category')); save(); renderPacking(); } });
+  $('#addTraveler').onclick = () => openPrompt({ title: 'New traveller', placeholder: 'e.g. Jolie', onSave: v => { trip.packing.sections.push(mkSection(v, 'traveler')); save(); renderPacking(); } });
+  $('#untickAll').onclick = () => { trip.packing.sections.forEach(s => s.items.forEach(i => i.done = false)); save(); renderPacking(); toast('All unticked'); };
+  function openPackStart() {
+    const others = db.trips.filter(t => t !== trip && t.packing.sections.length);
+    const opts = [
+      ['starter', 'Starter list', 'Documents, medicine, beach, tech, clothes'],
+      ...others.map(t => ['copy:' + t.id, `Copy from ${t.title}`, `${t.packing.sections.length} sections · ${t.packing.sections.reduce((n, s) => n + s.items.length, 0)} items`]),
+      ['blank', 'Blank list', 'Add your own categories and travellers'],
+    ];
+    $('#packStartOpts').innerHTML = opts.map(([v, l, d]) => `<button type="button" data-v="${v}">${esc(l)}<small>${esc(d)}</small></button>`).join('');
+    $('#packStartOpts').querySelectorAll('button').forEach(b => b.onclick = () => {
+      const v = b.dataset.v;
+      if (v === 'starter') trip.packing.sections = STARTER.map(([n, items]) => mkSection(n, 'category', items));
+      else if (v.startsWith('copy:')) {
+        const src = db.trips.find(t => t.id === v.slice(5));
+        trip.packing.sections = src.packing.sections.map(s => mkSection(s.name, s.kind, s.items.map(i => i.text)));
+      } else trip.packing.sections = [mkSection('Essentials', 'category')];
+      save(); hide(); renderPacking();
+    });
+    show('#packStart');
+  }
 
   /* ---------- go ---------- */
   function render() { renderHeader(); renderDays(); renderGrid(); }
   const t = todayISO(), ti = trip.days.findIndex(d => d.date === t);
   if (ti >= 0) cur = ti;
-  render(); route(); requestAnimationFrame(scrollToStart);
+  route();
 
   // service worker (network-first while we build)
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
