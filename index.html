@@ -26,7 +26,8 @@
     <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
     <symbol id="i-plane" viewBox="0 0 24 24"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></symbol>
     <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
-    <symbol id="i-note" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8M16 17H8M10 9H8"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M21.38 5.63a2.12 2.12 0 1 0-3-3l-5.01 5.01a2 2 0 0 0-.51.86l-.84 2.87a.5.5 0 0 0 .62.62l2.87-.84a2 2 0 0 0 .86-.51z"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
     <symbol id="i-edit" viewBox="0 0 24 24"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
@@ -43,8 +44,10 @@
 
 <main>
   <section class="view on" id="v-itinerary">
-    <div class="days" id="days"></div>
-    <div class="dayhead" id="dayhead"></div>
+    <div class="sticky">
+      <div class="days" id="days"></div>
+      <div class="dayhead" id="dayhead"></div>
+    </div>
     <div class="grid" id="grid"></div>
   </section>
 
@@ -95,7 +98,8 @@
         <div class="results" id="placeResults"></div>
       </div>
     </div>
-    <label>Or paste a map link <span class="muted">(Google Maps, Waze, Apple Maps…)</span><input name="maps" type="url" inputmode="url" placeholder="https://"></label>
+    <button type="button" class="linkbtn" id="showLink"><svg class="ico"><use href="#i-link"/></svg>Paste a map link instead</button>
+    <label id="linkField" hidden>Map link <span class="muted">(Google Maps, Waze…)</span><input name="maps" type="url" inputmode="url" placeholder="https://"></label>
     <label>Notes <span class="muted">(optional)</span><textarea name="notes" rows="3" placeholder="Booking ref, what to order, reminders…"></textarea></label>
     <div class="actions">
       <button type="button" class="btn ghost danger" id="delItem">Delete</button>

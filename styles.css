@@ -166,3 +166,15 @@ form input:focus,form textarea:focus{border-color:var(--sea)}
 .in-r{animation:inR .22s ease-out}
 .in-l{animation:inL .22s ease-out}
 .attr{font-size:10px;color:var(--muted);padding:6px 12px;text-align:right}
+
+/* sticky day bar */
+.sticky{position:sticky;top:0;z-index:4;background:var(--sand);margin:0 -14px;padding:0 14px;box-shadow:0 6px 10px -10px rgba(36,50,58,.25)}
+.sticky .days{margin-top:0;padding-top:10px}
+.sticky .dayhead{margin-top:0;padding-bottom:8px}
+/* same height for every input, even an empty time field on iOS */
+form input{height:48px;min-height:48px;line-height:1.2}
+form input[type=time],form input[type=date]{display:flex;align-items:center}
+/* manual link button */
+.linkbtn{display:flex;align-items:center;gap:8px;border:0;background:none;color:var(--sea);font-weight:600;font-size:14px;padding:2px 0 14px;cursor:pointer}
+.linkbtn .ico{width:16px;height:16px}
+.lane .item .flags{align-self:flex-start;margin-top:4px}.lane .item.short .flags{align-self:center;margin-top:0}

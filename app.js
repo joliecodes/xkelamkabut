@@ -226,8 +226,8 @@
     el.innerHTML = `<div class="ic">${icon(typeKey)}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>
       <div class="m">${fmtTime(x.start)}${x.end ? ' – ' + fmtTime(x.end) : ''}</div></div>
-      <div class="flags">${x.notes ? `<span title="Has notes">${icon('note')}</span>` : ''}${x.place || x.maps ? `<span title="Has location">${icon('other')}</span>` : ''}</div>`;
-    el.addEventListener('click', () => openView(x));
+      <div class="flags">${x.notes ? `<span title="Has notes">${icon('note')}</span>` : ''}${primaryMapUrl(x) ? `<a class="map" href="${esc(primaryMapUrl(x))}" target="_blank" rel="noopener">Map ↗</a>` : ''}</div>`;
+    el.addEventListener('click', ev => { if (!ev.target.closest('.map')) openView(x); });
     return el;
   }
 
@@ -301,6 +301,7 @@
     form.start.value = pendingStart;
     form.end.value = item?.end || '';
     form.maps.value = item?.maps || '';
+    $('#linkField').hidden = !item?.maps; $('#showLink').hidden = !!item?.maps;
     setPlace(item?.place || null); $('#placeQ').value = ''; $('#placeResults').innerHTML = '';
     form.notes.value = item?.notes || '';
     $('#delItem').hidden = !item; $('#delItem').textContent = 'Delete'; $('#delItem').dataset.armed = '';
@@ -384,14 +385,16 @@
       if (e.name !== 'AbortError') out.innerHTML = '<div class="pr muted">Search is unavailable right now. Paste a link below instead.</div>';
     }
   }
+  $('#showLink').onclick = () => { $('#showLink').hidden = true; $('#linkField').hidden = false; form.maps.focus(); };
   $('#placeQ').addEventListener('input', e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => searchPlaces(e.target.value.trim()), 350); });
 
   // Links that open the user's preferred maps app
+  // Timeline "Map" pill: pasted link first, otherwise Google Maps
+  function primaryMapUrl(x) { return x.maps || (x.place ? `https://www.google.com/maps/search/?api=1&query=${x.place.lat},${x.place.lon}` : ''); }
   function openInLinks(p) {
     const ll = `${p.lat},${p.lon}`, q = encodeURIComponent(p.name);
     return [
       ['Google Maps', `https://www.google.com/maps/search/?api=1&query=${ll}`],
-      ['Apple Maps', `https://maps.apple.com/?ll=${ll}&q=${q}`],
       ['Waze', `https://waze.com/ul?ll=${ll}&navigate=yes`],
     ];
   }
@@ -418,7 +421,7 @@
     const day = trip.days[cur]; if (!day) return;
     const first = day.items.length ? Math.min(...day.items.map(i => toMin(i.start))) : 7 * 60;
     const grid = $('#grid');
-    const top = grid.getBoundingClientRect().top + scrollY + (first / 60) * HOUR_PX - 70;
+    const top = grid.getBoundingClientRect().top + scrollY + (first / 60) * HOUR_PX - 150;
     scrollTo({ top: Math.max(0, top), behavior: 'auto' });
   }
 
