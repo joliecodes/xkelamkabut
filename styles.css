@@ -183,5 +183,15 @@ form input[type=time],form input[type=date]{display:flex;align-items:center}
 .suggest{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:1.5px dashed #cfe6e6;background:#f6fbfb;border-radius:12px;padding:10px 12px;margin-bottom:8px;font-size:14px;cursor:pointer;color:var(--ink)}
 .suggest .ico{width:16px;height:16px;color:var(--sea);flex:none}
 .suggest small{color:var(--muted)}
-.shake{animation:shake .3s}
-@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.shake{animation:shake .5s}
+@keyframes shake{12%,62%{transform:translateX(-6px)}37%,87%{transform:translateX(6px)}100%{transform:none}}
+form input.invalid{border-color:#d9534f;box-shadow:0 0 0 3px rgba(217,83,79,.15)}
+.err{color:#c4513a;font-size:13px;font-weight:500;margin:-4px 0 12px;line-height:1.4}
+
+/* icons pinned to the bottom-right of taller cards */
+
+.lane .item:not(.short) .flags{position:absolute;right:8px;bottom:6px;margin:0}
+.lane .item.short .body{flex:1}
+.lane .item.short .flags{margin-left:auto}
+.dayhead .round{width:36px;height:36px;padding:0;background:#f1efea;color:var(--ink)}
+.dayhead .round .ico{width:16px;height:16px}

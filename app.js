@@ -132,7 +132,7 @@
     }
     head.innerHTML = `<div><h2>${day.date ? fmtDate(day.date, { weekday: 'long', day: 'numeric', month: 'short' }) : `Day ${cur + 1}`}</h2>
       <div class="sub">Day ${cur + 1}${day.label ? ' · ' + esc(day.label) : ''}</div></div>
-      <button aria-label="Day options" id="dayOpts">⋯</button>`;
+      <button aria-label="Edit day" id="dayOpts" class="round">${icon('edit')}</button>`;
     $('#dayOpts').onclick = openDayMenu;
 
     // Timeline: items placed by start/end, like a calendar app
@@ -287,7 +287,7 @@
     const badge = $('#badge');
     badge.style.setProperty('--c', T.c); badge.style.setProperty('--bg', T.bg);
     badge.innerHTML = icon(pickedType);
-    $('#drawerTitle').textContent = editing ? `Edit ${T.label.toLowerCase()}` : `New ${T.label.toLowerCase()}`;
+    $('#drawerTitle').textContent = `${editing ? 'Edit' : 'New'} ${T.label}`;
     form.title.placeholder = PLACEHOLDER[pickedType];
     suggestPlace();
     $('#step2').classList.add('on'); $('#step1').classList.remove('on');
@@ -306,6 +306,7 @@
     $('#linkField').hidden = !item?.maps; $('#showLink').hidden = !!item?.maps;
     setPlace(item?.place || null); $('#placeQ').value = ''; $('#placeResults').innerHTML = '';
     form.notes.value = item?.notes || '';
+    $('#timeErr').hidden = true; ['title', 'start', 'end'].forEach(n => form[n].classList.remove('invalid', 'shake'));
     $('#delItem').hidden = !item; $('#delItem').textContent = 'Delete'; $('#delItem').dataset.armed = '';
     item ? goStep2() : goStep1();
     show('#drawer');
@@ -323,8 +324,15 @@
       place: currentPlace,
       notes: form.notes.value.trim(),
     };
-    if (!data.title) { form.title.classList.remove('shake'); void form.title.offsetWidth; form.title.classList.add('shake'); form.title.focus(); toast('Add a title'); return; }
-    if (!data.start) return;
+    if (!data.title) { flagError(form.title); form.title.focus(); toast('Add a title'); return; }
+    if (!data.start) { flagError(form.start); return; }
+    const clash = findOverlap(day, data, editing);
+    if (clash) {
+      $('#timeErr').textContent = `Overlaps with ${clash.title} (${fmtTime(clash.start)}${clash.end ? ' – ' + fmtTime(clash.end) : ''}). Pick another time.`;
+      $('#timeErr').hidden = false;
+      flagError(form.start); if (data.end) flagError(form.end);
+      return;
+    }
     if (editing) Object.assign(editing, data);
     else day.items.push({ id: uid(), ...data });
     save(); renderGrid();
@@ -340,6 +348,23 @@
     save(); hide(); renderGrid(); toast('Deleted');
   };
 
+  // Red rim + double shake; cleared as soon as the field changes
+  function flagError(input) {
+    input.classList.remove('shake'); void input.offsetWidth;
+    input.classList.add('invalid', 'shake');
+  }
+  ['title', 'start', 'end'].forEach(n => form[n].addEventListener('input', () => {
+    form[n].classList.remove('invalid');
+    if (n !== 'title') { form.start.classList.remove('invalid'); form.end.classList.remove('invalid'); $('#timeErr').hidden = true; }
+  }));
+
+  // One thing at a time: block items that overlap another on the same day
+  function span(it) { const s = toMin(it.start); let e = it.end ? toMin(it.end) : s + DEFAULT_MIN; if (e <= s) e = s + DEFAULT_MIN; return [s, e]; }
+  function findOverlap(day, data, self) {
+    const [s, e] = span(data);
+    return day.items.find(o => o !== self && (() => { const [os, oe] = span(o); return s < oe && os < e; })());
+  }
+
   const normaliseUrl = u => !u ? '' : /^https?:\/\//i.test(u) ? u : 'https://' + u;
 
   /* ---------- place search (OpenStreetMap via Photon) ---------- */
@@ -348,7 +373,7 @@
     currentPlace = p;
     const chip = $('#placeChip');
     chip.hidden = !p;
-    if (p) chip.innerHTML = `${icon('other')}<span><b>${esc(p.name)}</b>${p.address ? `<small>${esc(p.address)}</small>` : ''}</span>
+    if (p) chip.innerHTML = `${icon('pin')}<span><b>${esc(p.name)}</b>${p.address ? `<small>${esc(p.address)}</small>` : ''}</span>
       <button type="button" aria-label="Remove place">${icon('x')}</button>`;
     chip.querySelector('button')?.addEventListener('click', () => { setPlace(null); suggestPlace(); });
     $('#placeQ').closest('.search').hidden = !!p;
@@ -407,7 +432,7 @@
       list.forEach(p => {
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'pr';
-        b.innerHTML = `${icon('other')}<span><b>${esc(p.name)}</b><small>${esc(p.address)}</small></span>`;
+        b.innerHTML = `${icon('pin')}<span><b>${esc(p.name)}</b><small>${esc(p.address)}</small></span>`;
         b.onclick = () => { setPlace(p); out.innerHTML = ''; $('#placeQ').value = ''; if (!form.title.value) form.title.value = p.name; };
         out.appendChild(b);
       });
@@ -477,7 +502,6 @@
     trip.days.splice(cur, 1); cur = Math.max(0, cur - 1);
     save(); hide(); render(); toast('Day deleted');
   };
-  $('#cancelDay').onclick = hide;
 
   /* ---------- drawer show/hide ---------- */
   let openEl = null;
