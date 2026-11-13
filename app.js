@@ -9,8 +9,8 @@
     other:     { label: 'Other',     desc: 'Shopping, errands, anything else', c: '#c4902e', bg: '#fbf4e4' },
   };
   const icon = name => `<svg class="ico"><use href="#i-${name}"/></svg>`;
-  const FIRST_HOUR = 6, LAST_HOUR = 23;
-  const HOUR_PX = 112;      // height of one hour on the timeline
+  const FIRST_HOUR = 0, LAST_HOUR = 24;   // full day, 12 am to 12 am
+  const HOUR_PX = 88;       // height of one hour on the timeline
   const DEFAULT_MIN = 30;   // items without an end time show as 30 min
   const toMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
   const fromMin = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
@@ -104,7 +104,7 @@
       const b = document.createElement('button');
       b.className = i === cur ? 'on' : '';
       b.innerHTML = `<b>Day ${i + 1}</b><span>${d.date ? fmtDate(d.date, { weekday: 'short', day: 'numeric' }) : '—'}</span>`;
-      b.onclick = () => { cur = i; render(); };
+      b.onclick = () => changeDay(i);
       wrap.appendChild(b);
     });
     const add = document.createElement('button');
@@ -117,7 +117,7 @@
   function addDay() {
     const last = trip.days.at(-1);
     trip.days.push({ id: uid(), date: last?.date ? addDays(last.date, 1) : todayISO(), label: '', items: [] });
-    cur = trip.days.length - 1; save(); render();
+    cur = trip.days.length - 1; save(); render(); scrollToStart();
     toast(`Day ${cur + 1} added`);
   }
 
@@ -221,14 +221,13 @@
     const typeKey = TYPES[x.type] ? x.type : 'other';
     const mins = e - s;
     const el = document.createElement('div');
-    el.className = 'item' + (mins < 25 ? ' short' : '') + (mins >= 90 ? ' tall' : '');
+    el.className = 'item' + (mins <= 30 ? ' short' : '') + (mins >= 90 ? ' tall' : '');
     el.style.setProperty('--c', T.c); el.style.setProperty('--bg', T.bg);
     el.innerHTML = `<div class="ic">${icon(typeKey)}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>
       <div class="m">${fmtTime(x.start)}${x.end ? ' – ' + fmtTime(x.end) : ''}</div></div>
-      <div class="flags">${x.notes ? `<span title="Has notes">${icon('note')}</span>` : ''}
-      ${x.maps ? `<a class="map" href="${esc(x.maps)}" target="_blank" rel="noopener">Map ↗</a>` : ''}</div>`;
-    el.addEventListener('click', ev => { if (!ev.target.closest('.map')) openView(x); });
+      <div class="flags">${x.notes ? `<span title="Has notes">${icon('note')}</span>` : ''}${x.place || x.maps ? `<span title="Has location">${icon('other')}</span>` : ''}</div>`;
+    el.addEventListener('click', () => openView(x));
     return el;
   }
 
@@ -245,8 +244,15 @@
     $('#vTime').textContent = fmtTime(x.start) + (x.end ? ' – ' + fmtTime(x.end) : '');
     $('#vNotesRow').hidden = !x.notes;
     $('#vNotes').textContent = x.notes || '';
-    const m = $('#vMaps');
-    m.hidden = !x.maps; if (x.maps) m.href = x.maps;
+    const p = x.place;
+    $('#vPlaceRow').hidden = !p;
+    if (p) $('#vPlace').innerHTML = `<b>${esc(p.name)}</b>${p.address ? `<small>${esc(p.address)}</small>` : ''}`;
+    const links = [];
+    if (x.maps) links.push(['Open link', x.maps, 'primary']);
+    if (p) links.push(...openInLinks(p));
+    $('#vLinks').innerHTML = links.map(([label, href, cls]) =>
+      `<a class="btn ${cls || 'ghost'}" href="${esc(href)}" target="_blank" rel="noopener">${label}</a>`).join('');
+    $('#vLinks').hidden = !links.length;
     show('#viewDrawer');
   }
   $('#vEdit').onclick = () => openDrawer(viewing);
@@ -295,6 +301,7 @@
     form.start.value = pendingStart;
     form.end.value = item?.end || '';
     form.maps.value = item?.maps || '';
+    setPlace(item?.place || null); $('#placeQ').value = ''; $('#placeResults').innerHTML = '';
     form.notes.value = item?.notes || '';
     $('#delItem').hidden = !item; $('#delItem').textContent = 'Delete'; $('#delItem').dataset.armed = '';
     item ? goStep2() : goStep1();
@@ -310,6 +317,7 @@
       start: form.start.value,
       end: form.end.value,
       maps: normaliseUrl(form.maps.value.trim()),
+      place: currentPlace,
       notes: form.notes.value.trim(),
     };
     if (!data.title || !data.start) return;
@@ -329,6 +337,90 @@
   };
 
   const normaliseUrl = u => !u ? '' : /^https?:\/\//i.test(u) ? u : 'https://' + u;
+
+  /* ---------- place search (OpenStreetMap via Photon) ---------- */
+  let currentPlace = null, searchTimer, searchCtl;
+  function setPlace(p) {
+    currentPlace = p;
+    const chip = $('#placeChip');
+    chip.hidden = !p;
+    if (p) chip.innerHTML = `${icon('other')}<span><b>${esc(p.name)}</b>${p.address ? `<small>${esc(p.address)}</small>` : ''}</span>
+      <button type="button" aria-label="Remove place">${icon('x')}</button>`;
+    chip.querySelector('button')?.addEventListener('click', () => setPlace(null));
+    $('#placeQ').closest('.search').hidden = !!p;
+  }
+  // bias results towards places already in this trip
+  function biasPoint() {
+    const all = trip.days.flatMap(d => d.items).map(i => i.place).filter(Boolean);
+    return all.at(-1) || null;
+  }
+  async function searchPlaces(q) {
+    const out = $('#placeResults');
+    if (q.length < 3) { out.innerHTML = ''; return; }
+    searchCtl?.abort(); searchCtl = new AbortController();
+    const b = biasPoint();
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6&lang=en${b ? `&lat=${b.lat}&lon=${b.lon}` : ''}`;
+    out.innerHTML = '<div class="pr muted">Searching…</div>';
+    try {
+      const res = await fetch(url, { signal: searchCtl.signal });
+      const data = await res.json();
+      const list = (data.features || []).map(f => {
+        const pr = f.properties || {}, [lon, lat] = f.geometry.coordinates;
+        const name = pr.name || [pr.housenumber, pr.street].filter(Boolean).join(' ') || pr.city || 'Unnamed place';
+        const address = [[pr.housenumber, pr.street].filter(Boolean).join(' '), pr.district || pr.locality, pr.city, pr.state, pr.country]
+          .filter((v, i, a) => v && v !== name && a.indexOf(v) === i).join(', ');
+        return { name, address, lat: +lat.toFixed(6), lon: +lon.toFixed(6) };
+      });
+      out.innerHTML = list.length ? '' : '<div class="pr muted">No matches. Try another spelling, or paste a link below.</div>';
+      list.forEach(p => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'pr';
+        b.innerHTML = `${icon('other')}<span><b>${esc(p.name)}</b><small>${esc(p.address)}</small></span>`;
+        b.onclick = () => { setPlace(p); out.innerHTML = ''; $('#placeQ').value = ''; if (!form.title.value) form.title.value = p.name; };
+        out.appendChild(b);
+      });
+      if (list.length) out.insertAdjacentHTML('beforeend', '<div class="attr">Search by Photon · © OpenStreetMap contributors</div>');
+    } catch (e) {
+      if (e.name !== 'AbortError') out.innerHTML = '<div class="pr muted">Search is unavailable right now. Paste a link below instead.</div>';
+    }
+  }
+  $('#placeQ').addEventListener('input', e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => searchPlaces(e.target.value.trim()), 350); });
+
+  // Links that open the user's preferred maps app
+  function openInLinks(p) {
+    const ll = `${p.lat},${p.lon}`, q = encodeURIComponent(p.name);
+    return [
+      ['Google Maps', `https://www.google.com/maps/search/?api=1&query=${ll}`],
+      ['Apple Maps', `https://maps.apple.com/?ll=${ll}&q=${q}`],
+      ['Waze', `https://waze.com/ul?ll=${ll}&navigate=yes`],
+    ];
+  }
+
+  /* ---------- day switching: tabs + swipe ---------- */
+  function changeDay(i, dir) {
+    if (i < 0 || i >= trip.days.length || i === cur) return;
+    dir = dir || (i > cur ? 1 : -1);
+    cur = i; render(); scrollToStart();
+    const g = $('#grid'), h = $('#dayhead');
+    [g, h].forEach(el => { el.classList.remove('in-l', 'in-r'); void el.offsetWidth; el.classList.add(dir > 0 ? 'in-r' : 'in-l'); });
+  }
+  let tx = 0, ty = 0, tt = 0;
+  const swipeArea = $('#v-itinerary');
+  swipeArea.addEventListener('touchstart', e => { const t = e.touches[0]; tx = t.clientX; ty = t.clientY; tt = Date.now(); }, { passive: true });
+  swipeArea.addEventListener('touchend', e => {
+    if (openEl || e.target.closest('.days')) return;
+    const t = e.changedTouches[0], dx = t.clientX - tx, dy = t.clientY - ty;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.8 && Date.now() - tt < 600) changeDay(cur + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1);
+  }, { passive: true });
+
+  // Open each day at its first item (or 7 am when empty)
+  function scrollToStart() {
+    const day = trip.days[cur]; if (!day) return;
+    const first = day.items.length ? Math.min(...day.items.map(i => toMin(i.start))) : 7 * 60;
+    const grid = $('#grid');
+    const top = grid.getBoundingClientRect().top + scrollY + (first / 60) * HOUR_PX - 70;
+    scrollTo({ top: Math.max(0, top), behavior: 'auto' });
+  }
 
   /* ---------- day menu ---------- */
   const dayForm = $('#dayForm');
@@ -377,7 +469,7 @@
   function render() { renderHeader(); renderDays(); renderGrid(); }
   const t = todayISO(), ti = trip.days.findIndex(d => d.date === t);
   if (ti >= 0) cur = ti;
-  render(); route();
+  render(); route(); requestAnimationFrame(scrollToStart);
 
   // service worker (network-first while we build)
   if ('serviceWorker' in navigator && location.protocol === 'https:') {

@@ -87,7 +87,15 @@
       <label>Start<input name="start" type="time" required></label>
       <label>End <span class="muted">(optional)</span><input name="end" type="time"></label>
     </div>
-    <label>Google Maps link <span class="muted">(optional)</span><input name="maps" type="url" inputmode="url" placeholder="Paste a maps.app.goo.gl link"></label>
+    <div class="field">
+      <div class="flabel">Location <span class="muted">(optional)</span></div>
+      <div class="chip" id="placeChip" hidden></div>
+      <div class="search">
+        <input id="placeQ" type="search" placeholder="Search a place, e.g. Kaisun Phu Quoc" autocomplete="off" enterkeyhint="search">
+        <div class="results" id="placeResults"></div>
+      </div>
+    </div>
+    <label>Or paste a map link <span class="muted">(Google Maps, Waze, Apple Maps…)</span><input name="maps" type="url" inputmode="url" placeholder="https://"></label>
     <label>Notes <span class="muted">(optional)</span><textarea name="notes" rows="3" placeholder="Booking ref, what to order, reminders…"></textarea></label>
     <div class="actions">
       <button type="button" class="btn ghost danger" id="delItem">Delete</button>
@@ -109,7 +117,8 @@
   </div>
   <div class="vrow"><svg class="ico"><use href="#i-clock"/></svg><span id="vTime"></span></div>
   <div class="vrow" id="vNotesRow"><svg class="ico"><use href="#i-note"/></svg><div id="vNotes"></div></div>
-  <a class="btn maps" id="vMaps" target="_blank" rel="noopener"><svg class="ico"><use href="#i-nav"/></svg>Open in Google Maps</a>
+  <div class="vrow" id="vPlaceRow"><svg class="ico"><use href="#i-other"/></svg><div id="vPlace" class="vplace"></div></div>
+  <div class="vlinks" id="vLinks"></div>
 </div>
 
 <div class="drawer small" id="dayMenu" role="dialog" aria-modal="true">
