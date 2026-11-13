@@ -1,0 +1,24 @@
+{
+ "text": "©   Trip to Bordeaux Saint-Jean\nOutbound Journey   Return Journey\nReturn : Sat 13 Feb\n11:58 AM Bordeaux Saint-Jean   (x3\n2:47 PM Paris Montparnasse\n®™ 2h 49min Direct ied Grande Vitesse\nA change of plans?\nAmend this trip\nConsult the online help section [4\nWho is travelling?\n(as) ALEX TRAVELLER\n(rt) SAM TRAVELLER\n(1r) KIT TRAVELLER\nSee your tickets   >\n=   5   2\nTrip   Tickets   Catalogue   Account\n",
+ "cols": "©   Trip to Bordeaux Saint-Jean\nOutbound Journey\nReturn : Sat 13 Feb\n11:58 AM Bordeaux Saint-Jean\n2:47 PM Paris Montparnasse\n®™ 2h 49min Direct ied Grande Vitesse\nA change of plans?\nAmend this trip\nConsult the online help section [4\nWho is travelling?\n(as) ALEX TRAVELLER\n(rt) SAM TRAVELLER\n(1r) KIT TRAVELLER\nSee your tickets\n=   5\nTrip   Tickets\n\nReturn Journey\n(x3\n>\n2\nCatalogue   Account\n",
+ "expected": {
+  "kind": "train",
+  "legs": [
+   {
+    "operator": "OUIGO",
+    "number": "",
+    "ref": "",
+    "from": "Bordeaux Saint-Jean",
+    "to": "Paris Montparnasse",
+    "depDate": "2027-02-13",
+    "depTime": "11:58",
+    "arrDate": "2027-02-13",
+    "arrTime": "14:47",
+    "duration": "2h 49m",
+    "passengers": "3",
+    "seats": "",
+    "notes": "Direct"
+   }
+  ]
+ }
+}

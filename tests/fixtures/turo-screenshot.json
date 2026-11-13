@@ -1,0 +1,21 @@
+{
+ "text": "Get help\nDETAILS   MESSAGES\nBooked trip with Mimi’s   ME =»\nMercedes-Benz   Ss\nES\nCLA 2014   GHO42JK\nMon 1Feb - Thu 4Feb\n12:00 pm   6:00 pm\nLOCATION\nAvenue des Pyrénées, Villenave-d'ornon, FR   =\n33140\nPICKUP & RETURN INSTRUCTIONS\nJe vous donnerai les clés en personne.\nEXTRAS\nChild safety seat\nThis trip starts in 80 days.\nChange trip\nHOSTED BY\nSearch   Favorites   rs   Inbox   More\n",
+ "cols": "DETAILS\nBooked trip with Mimi’s\nMercedes-Benz\nCLA 2014\nMon 1Feb - Thu 4Feb\n12:00 pm\nLOCATION\nAvenue des Pyrénées, Villenave-d'ornon, FR\n33140\nPICKUP & RETURN INSTRUCTIONS\nJe vous donnerai les clés en personne.\nEXTRAS\nChild safety seat\nThis trip starts in 80 days.\nChange trip\nHOSTED BY\nSearch   Favorites   rs\n\nGet help\nMESSAGES\nME =»\nSs\nES\nGHO42JK\n6:00 pm\n=\nInbox   More\n",
+ "expected": {
+  "kind": "car",
+  "car": {
+   "company": "Turo · Mimi’s",
+   "car": "Mercedes-Benz CLA 2014",
+   "plate": "GH042JK",
+   "ref": "",
+   "pickup": "Avenue des Pyrénées, Villenave-d'ornon, FR 33140",
+   "pickDate": "2027-02-01",
+   "pickTime": "12:00",
+   "retDate": "2027-02-04",
+   "retTime": "18:00",
+   "dropoff": "",
+   "phone": "",
+   "notes": "Extras: Child safety seat · Je vous donnerai les clés en personne."
+  }
+ }
+}

@@ -9,20 +9,35 @@
   const iso = (y, m, d) => (y && m && d) ? `${y}-${pad(m)}-${pad(d)}` : '';
   const clean = s => (s || '').replace(/\s+/g, ' ').trim();
 
+  // No year on the page: take the next year (from today) where the date is still ahead,
+  // and, when a weekday is written next to it ("Sat 30 Jan"), the year where it falls on that day
+  const WD = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+  function guessYear(mo, d, ctx) {
+    const now = new Date(), y0 = now.getFullYear(), soon = new Date(now - 30 * 864e5);
+    const wm = (ctx || '').match(/\b(sun|mon|tue|wed|thu|fri|sat)[a-z]*\.?,?\s*\d{1,2}\s*(?:st|nd|rd|th)?\s*[a-z]/i) || (ctx || '').match(/\b(sun|mon|tue|wed|thu|fri|sat)[a-z]*\.?,?\s+[a-z]{3,9}\.?\s+\d/i);
+    const wd = wm ? WD[wm[1].slice(0, 3).toLowerCase()] : null;
+    for (let y = y0; y <= y0 + 6; y++) {
+      const dt = new Date(y, mo - 1, d);
+      if (dt < soon) continue;
+      if (wd == null || dt.getDay() === wd) return y;
+    }
+    return new Date(y0, mo - 1, d) < soon ? y0 + 1 : y0;
+  }
   // "30 November 2026", "November 30, 2026", "Mon, Nov 30", "30 Nov", "30/11/2026", "2026-11-30"
   function parseDate(s, fallbackYear) {
     if (!s) return '';
     let m;
     if ((m = s.match(/(\d{4})-(\d{2})-(\d{2})/))) return iso(+m[1], +m[2], +m[3]);
     if ((m = s.match(new RegExp(`(\\d{1,2})(?:st|nd|rd|th)?\\s*${MON}\\.?,?\\s*(\\d{4})?`, 'i'))))
-      return iso(+(m[3] || fallbackYear), MONTHS[m[2].slice(0, 3).toLowerCase()], +m[1]);
+      { const mo = MONTHS[m[2].slice(0, 3).toLowerCase()]; return iso(+(m[3] || fallbackYear || guessYear(mo, +m[1], s)), mo, +m[1]); }
     if ((m = s.match(new RegExp(`${MON}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\s*,?\\s*(\\d{4})?`, 'i'))))
-      return iso(+(m[3] || fallbackYear), MONTHS[m[1].slice(0, 3).toLowerCase()], +m[2]);
+      { const mo = MONTHS[m[1].slice(0, 3).toLowerCase()]; return iso(+(m[3] || fallbackYear || guessYear(mo, +m[2], s)), mo, +m[2]); }
     if ((m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/))) return iso(+m[3], +m[2], +m[1]);
     return '';
   }
   const DATE_RE = new RegExp(`(\\d{4}-\\d{2}-\\d{2}|\\d{1,2}(?:st|nd|rd|th)?\\s*${MON}\\.?,?(?:\\s*\\d{4})?|${MON}\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?\\s*,?(?:\\s*\\d{4})?|\\d{1,2}/\\d{1,2}/\\d{4})`, 'i');
-  const yearIn = t => +((t.match(/\b(20\d{2})\b/) || [])[1] || new Date().getFullYear());
+  // The year written on the page (0 if none, so each date gets a guessed year). Old years, such as a car's model year, don't count
+  const yearIn = t => { const y = [...t.matchAll(/\b(20\d{2})\b/g)].map(m => +m[1]).find(y => y >= new Date().getFullYear() - 1); return y || 0; };
   const time24 = s => { const m = (s || '').match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i); if (!m) return ''; let h = +m[1]; if (m[3]) { const pm = /pm/i.test(m[3]); if (h === 12) h = pm ? 12 : 0; else if (pm) h += 12; } return `${pad(h)}:${m[2]}`; };
 
   const AIRLINES = ['AirAsia X', 'AirAsia', 'Malaysia Airlines', 'Batik Air', 'Firefly', 'MYAirline', 'Singapore Airlines', 'Scoot', 'Jetstar', 'VietJet Air', 'Vietjet', 'Vietnam Airlines', 'Bamboo Airways', 'Thai AirAsia', 'Thai Airways', 'Garuda Indonesia', 'Lion Air', 'Cebu Pacific', 'Philippine Airlines', 'Cathay Pacific', 'Emirates', 'Qatar Airways', 'Etihad', 'Turkish Airlines', 'Japan Airlines', 'ANA', 'Korean Air', 'EVA Air', 'China Airlines', 'Qantas', 'British Airways', 'KLM', 'Lufthansa'];
@@ -78,17 +93,31 @@
   }
 
   function detectKind(t) {
-    const f = (t.match(/\b(flight|airline|airport|depart|boarding|baggage|carry-on|seat \d|terminal|PNR|non-stop)\b/gi) || []).length;
-    const s = (t.match(/\b(hotel|check-?in|check-?out|room type|property|arrival|guest|nights?|resort|agoda|booking\.com|voucher)\b/gi) || []).length;
-    if (!f && !s) return 'other';
-    return f >= s ? 'flight' : 'stay';
+    const n = re => (t.match(re) || []).length;
+    const score = {
+      flight: n(/\b(flight|airline|airport|depart|boarding pass|baggage|carry-on|seat \d|terminal|PNR|non-stop)\b/gi),
+      stay: n(/\b(hotel|check-?in|check-?out|room type|property|arrival|guest|nights?|resort|agoda|booking\.com|voucher)\b/gi),
+      train: 2 * n(/\b(train|rail|railway|ouigo|sncf|tgv|inoui|eurostar|trenitalia|italo|renfe|deutsche bahn|thalys|ktm|ets|grande vitesse|coach \d+|carriage|platform)\b/gi),
+      bus: 2 * n(/\b(bus|flixbus|coach operator|bus terminal|easybook|redbus|busonlineticket)\b/gi),
+      ferry: 2 * n(/\b(ferry|jetty|pier|vessel|speedboat|catamaran|crossing)\b/gi),
+      car: 2 * n(/\b(turo|car rental|rental car|car hire|hertz|avis|europcar|sixt|getaround|pick-?up\s*(?:&|and)\s*return|hosted by|booked trip with|licen[cs]e plate)\b/gi) + n(CAR_MAKES),
+    };
+    // check-in words also turn up in flight and train confirmations: only a stay if nothing stronger
+    const best = Object.entries(score).sort((a, b) => b[1] - a[1])[0];
+    if (!best[1]) return 'other';
+    if (best[0] === 'stay' && score.flight && score.flight >= score.stay) return 'flight';
+    return best[0];
   }
+  const CAR_MAKES = /\b(Mercedes-?Benz|BMW|Audi|Toyota|Honda|Perodua|Proton|Volkswagen|VW|Peugeot|Renault|Citro[eë]n|Fiat|Ford|Kia|Hyundai|Nissan|Mazda|Tesla|Volvo|Skoda|Seat|Opel|Mini|Dacia|Mitsubishi|Suzuki|Lexus|Jeep|Chevrolet|Subaru|Porsche|Land Rover|Cupra|MG|BYD)\b/g;
 
   function bookingRef(t) {
     const re = /\b(?:booking\s*(?:no|number|ref(?:erence)?|code|id)|confirmation\s*(?:no|number|code)?|PNR|record locator|reservation\s*(?:no|number|code)?)\b\.?\s*[:#]?\s*\n?\s*(?:[A-Z0-9]{1,3}\/)?([A-Za-z0-9][A-Za-z0-9-]{4,14})\b/gi;
     for (const m of t.matchAll(re)) if (/^[A-Z0-9-]+$/.test(m[1]) && /\d|^[A-Z]{5,8}$/.test(m[1])) return m[1];
     const pnr = t.match(/booking\s*reference\s*(?:\(PNR\))?[^\n]*\n\s*([A-Z0-9]{5,8})\b/i);
-    return pnr && /^[A-Z0-9]+$/.test(pnr[1]) ? pnr[1] : '';
+    if (pnr && /^[A-Z0-9]+$/.test(pnr[1])) return pnr[1];
+    // "Reference\nUPW4JA", "for reference UPW4JA": capitals and digits only
+    for (const m of t.matchAll(/\breference\s*[:#]?\s*\n?\s*([A-Za-z0-9]{5,8})\b/gi)) if (/^[A-Z0-9]+$/.test(m[1]) && /\d/.test(m[1]) && /[A-Z]/.test(m[1])) return m[1];
+    return '';
   }
 
   /* ---------- flights ---------- */
@@ -200,8 +229,8 @@
     const src = cols || text, year = yearIn(text);
     const lines = text.split('\n').map(l => l.trim());
     // name: labelled ("Property :"), else the line just above the street address
-    let block = after(src, /^\s*(property|hotel(?: name)?|accommodation)\s*:/i, /^(address|check|arrival|phone|tel|contact|property contact)/i, 4);
-    block = block.split('\n').map(l => l.replace(/^(hotel|property)\s*:\s*/i, '')).join(' ');
+    let block = after(src, /^\s*(property|hotel(?: name)?|accommodation)\s*(?::|\s{3,}(?=\S))/i, /^(address|check|arrival|phone|tel|contact|property contact)/i, 4);
+    block = block.split('\n').map(l => l.replace(/^(hotel|property)\s*(?::\s*|\s{3,})/i, '')).join(' ');
     const br = block.match(/\(([^()]*[A-Za-z][^()]*)\)/);
     let name = clean(br ? br[1] : block.split(/\s{3,}|\n/)[0]);
     const addrIdx = lines.findIndex(l => ADDRESS_LINE.test(l.replace(/^[^\w]+/, '')) && !/^\s*address\s*:/i.test(l));
@@ -215,6 +244,7 @@
     if (!address && addrIdx >= 0) address = clean(lines[addrIdx].replace(/^[^\w]+/, ''));
     let phone = clean((src.match(/(?:contact\s*number|phone|tel(?:ephone)?)\s*:?\s*(\+?\d[\d\s()-]{6,}\d)/i) || [])[1]);
     if (!phone && addrIdx >= 0) phone = clean((lines.slice(addrIdx + 1, addrIdx + 4).find(l => /^[^\w+]*\+?\d[\d\s().-]{7,}\d$/.test(l)) || '').replace(/^[^\d+]+/, ''));
+    phone = fixPlus(phone);
     const ref = (text.match(/\b(?:booking\s*id|confirmation\s*(?:no|number|code)|reservation\s*(?:no|number|code)|booking\s*(?:no|number|reference))\.?\s*[:#]?\s*([A-Z0-9-]{5,})/i) || [])[1]
       || (text.match(/\b(?:booking|reservation|confirmation)\s*#\s*([A-Z0-9]{5,12})\b/i) || [])[1] || bookingRef(text);
     const grab = re => { const m = text.match(re); return m ? parseDate(m[1], year) : ''; };
@@ -231,8 +261,9 @@
       const ft = range[0].match(/\((?:from|after)\s*(\d{1,2}:\d{2})\)/i), tt = range[0].match(/\((?:to|until|before|by)\s*(\d{1,2}:\d{2})\)/i);
       inTime ||= ft ? time24(ft[1]) : ''; outTime ||= tt ? time24(tt[1]) : '';
     }
-    let room = after(src, /^\s*room\s*type\s*:/i, LABEL, 2).split('\n');
+    let room = after(src, /^\s*room\b[^:\n]{0,14}\btype\b[^:\n]{0,6}:/i, LABEL, 2).split('\n');
     room = clean(room.length > 1 && room[1].length < 25 ? room.join(' ') : room[0]);
+    room = clean(room.replace(/(^|\s)(?![aA&])[A-Za-z](?=\s|$)/g, ' ').replace(/\b[B-DF-HJ-NP-TV-Z]{2,4}\b/g, ''));   // stray letters from text recognition
     if (!room) {
       const ri = lines.findIndex(l => /^rooms?$/i.test(l));
       const cand = lines.slice(ri >= 0 ? ri : 0).find(l => /\b(room|suite|studio|apartment|villa|bungalow|chalet|dorm|cabin)\b/i.test(l) && !/^rooms?$/i.test(l) && !NOT_NAME.test(l) && !/number of/i.test(l));
@@ -246,8 +277,151 @@
     return { name, address, phone, ref, inDate, inTime, outDate, outTime, room, notes };
   }
 
+
+  /* ---------- trains, buses and ferries ---------- */
+  const OPERATORS = ['OUIGO', 'TGV INOUI', 'SNCF', 'Eurostar', 'Thalys', 'Trenitalia', 'Italo', 'Renfe', 'Deutsche Bahn', 'ÖBB', 'SBB', 'TER', 'Intercités', 'KTM', 'ETS', 'FlixBus', 'BlaBlaCar Bus', 'Aeroline', 'Transnasional', 'Plusliner', 'Konsortium', 'Langkawi Ferry Line', 'Bluewater Express', 'Superdong', 'Phu Quoc Express', 'Batam Fast'];
+  const MODE_WORD = { train: 'train', bus: 'bus', ferry: 'ferry' };
+  const dur = s => { const m = (s || '').match(/\b(\d{1,2})\s*h(?:rs?|ours?)?\s*(\d{1,2})?\s*(?:m(?:in(?:ute)?s?)?)?\b/i); return m ? `${+m[1]}h${+m[2] ? ' ' + (+m[2]) + 'm' : ''}` : ''; };
+  const stripTail = s => clean((s || '').split(/\s{3,}/)[0].replace(/[(\[{]\s*x?\d*\s*$/i, ''));
+  function parseGround(text, mode) {
+    const year = yearIn(text), lines = text.split('\n'), ref = bookingRef(text);
+    const opRe = new RegExp(`\\b(${OPERATORS.map(o => o.replace(/ /g, '\\s')).join('|')})\\b`, 'i');
+    const op = (text.match(opRe) || [])[1] || (/grande\s+vitesse/i.test(text) ? 'OUIGO' : '');
+    const operator = op ? OPERATORS.find(o => o.toLowerCase() === op.toLowerCase().replace(/\s+/g, ' ')) || op : '';
+    const pax = (text.match(/\b(\d{1,2})\s*(?:passengers?|adults?|travell?ers?|pax)\b/i) || text.match(/\(?\bx\s?(\d{1,2})\b/) || [])[1] || '';
+    const number = (text.match(new RegExp(`\\b(?:${mode}|service)\\s*(?:no\\.?|number)?\\s*:?\\s*([A-Z]{0,3}\\s?\\d{2,5})\\b`, 'i')) || [])[1] || '';
+    const legs = [];
+    // App layout: "12:39 PM Paris Montparnasse" then "2:46 PM Bordeaux Saint-Jean", under a date heading
+    const tl = /^\s*(\d{1,2}[:.]\d{2}\s*(?:am|pm)?)\s+([A-ZÀ-Ý][^\n]*?)\s*$/i;
+    for (let i = 0; i < lines.length - 1; i++) {
+      const a = lines[i].match(tl), b = lines[i + 1].match(tl);
+      if (!a || !b) continue;
+      let head = '';
+      for (let j = i - 1; j >= Math.max(0, i - 4); j--) if (DATE_RE.test(lines[j])) { head = lines[j]; break; }
+      const dm = head.match(DATE_RE), depDate = dm ? parseDate(head.slice(Math.max(0, dm.index - 12)), year) : '';
+      const sec = lines.slice(i, i + 4).join('\n');
+      const depTime = time24(a[1].replace('.', ':')), arrTime = time24(b[1].replace('.', ':'));
+      const nextDay = arrTime && depTime && arrTime < depTime && depDate;
+      const arrDate = nextDay ? new Date(new Date(depDate + 'T12:00:00').getTime() + 864e5).toISOString().slice(0, 10) : depDate;
+      legs.push({ operator, number, ref, from: stripTail(a[2]), to: stripTail(b[2]), depDate, depTime, arrDate, arrTime,
+        duration: dur(sec), passengers: pax, seats: '', notes: /\bdirect\b/i.test(sec) ? 'Direct' : '' });
+      i++;
+    }
+    // Email layout: "Outbound: Saturday, 30 January 2027 at 12:39" with the route given once
+    if (!legs.length) {
+      let A = '', B = '';
+      const yj = text.match(/^\s*your\s+([^\n]+?)\s*\n(?:[^\n]*\n){0,2}?\s*journey\s+([^\n]+)/im);
+      if (yj) { A = stripTail(yj[1]); B = stripTail(yj[2]); }
+      if (!A) { const r = text.match(/\b(?:from\s+)?([A-Z][\w .'-]{2,40}?)\s*(?:→|->|–|>|\bto\b)\s*([A-Z][\w .'-]{2,40})/); if (r) { A = clean(r[1]); B = clean(r[2]); } }
+      lines.forEach(l => {
+        const m = l.match(/^\s*(outbound|outward|departure|depart|return|inbound)\s*(?:journey|trip)?\s*:?\s*(.+)$/i);
+        if (!m || !DATE_RE.test(m[2])) return;
+        const back = /return|inbound/i.test(m[1]);
+        const t = m[2].match(/\b(\d{1,2}[:.h]\d{2}\s*(?:am|pm)?)/i);
+        legs.push({ operator, number, ref, from: back ? B : A, to: back ? A : B, depDate: parseDate(m[2], year), depTime: t ? time24(t[1].replace(/[.h]/, ':')) : '',
+          arrDate: '', arrTime: '', duration: '', passengers: pax, seats: '', notes: '' });
+      });
+    }
+    return legs.filter((l, i, a) => a.findIndex(g => g.depDate === l.depDate && g.depTime === l.depTime) === i)
+      .sort((a, b) => (a.depDate + a.depTime).localeCompare(b.depDate + b.depTime));
+  }
+
+  /* ---------- car rental ---------- */
+  function parseCar(text) {
+    const year = yearIn(text), lines = text.split('\n').map(l => l.trim());
+    const HEAD = /^[A-Z][A-Z &'’-]{3,}$/;              // "LOCATION", "EXTRAS"
+    const under = (re, list, sep = ' ') => { const i = lines.findIndex(l => re.test(l)); if (i < 0) return ''; const out = []; for (let j = i + 1; j < lines.length && out.length < 4; j++) { if (!lines[j] || HEAD.test(lines[j]) || (list && out.length && /\.\s*$|\btrip\b/i.test(lines[j]))) break; out.push(lines[j]); } return out.map(l => l.split(/\s{3,}/).filter(x => /[A-Za-z0-9]{2}/.test(x)).join(' ')).join(typeof list === 'string' ? list : sep); };
+    const host = clean((text.match(/(?:trip|booked|hosted)\s+(?:with|by)\s+([^\n]+?)(?:\s{3,}|$)/im) || [])[1]);
+    const brand = /booked trip with/i.test(text) && /hosted by/i.test(text) ? 'Turo' : (text.match(/\b(Turo|Hertz|Avis|Europcar|Sixt|Getaround|Enterprise|Budget|Thrifty|Hertz|Socar|Trevo|GoCar)\b/i) || [])[1] || '';
+    const mi = lines.findIndex(l => CAR_MAKES.test(l)); CAR_MAKES.lastIndex = 0;
+    let car = '', plate = '';
+    if (mi >= 0) {
+      const make = (lines[mi].match(CAR_MAKES) || [''])[0]; CAR_MAKES.lastIndex = 0;
+      const rest = lines.slice(mi, mi + 3).join('   ').replace(make, '').split(/\s{3,}|\n/).map(clean).filter(Boolean);
+      const ok = x => /^[A-Z0-9][\w-]*(?:\s+[\w-]+){0,3}$/.test(x) && !/^[A-Z]{2}[O0-9]{3}[A-Z]{2}$/.test(x);
+      const model = rest.find(x => ok(x) && /\b(19|20)\d{2}\b/.test(x)) || rest.find(x => ok(x) && x.length >= 3 && /\d/.test(x)) || '';
+      const pm = lines.slice(mi, mi + 3).join(' ').match(/\b([A-Z]{2}[-\s]?[O0-9]{3}[-\s]?[A-Z]{2}|[A-Z]{1,3}\s?\d{1,4}\s?[A-Z]{0,3})\b(?=\s*$|\s{3})/m);
+      car = clean(`${make} ${model.replace(/\s+[A-Z]{2}[O0-9]{3}[A-Z]{2}$/, '')}`);
+      const pf = lines.slice(mi, mi + 3).join(' ').match(/\b([A-Z]{2})[-\s]?([O0-9]{3})[-\s]?([A-Z]{2})\b/);
+      plate = pf ? pf[1] + pf[2].replace(/O/g, '0') + pf[3] : (pm ? pm[1] : '');
+    }
+    // "Mon 1Feb - Thu 4Feb" then "12:00 pm   6:00 pm"
+    let pickDate = '', retDate = '', pickTime = '', retTime = '';
+    const ri = lines.findIndex(l => (l.match(new RegExp(DATE_RE.source, 'gi')) || []).length >= 2);
+    if (ri >= 0) {
+      const ds = [...lines[ri].matchAll(new RegExp(DATE_RE.source, 'gi'))];
+      pickDate = parseDate(lines[ri].slice(Math.max(0, ds[0].index - 5), ds[0].index + ds[0][0].length), year);
+      retDate = parseDate(lines[ri].slice(Math.max(0, ds[1].index - 5), ds[1].index + ds[1][0].length), year);
+      const ts = [...lines.slice(ri, ri + 3).join(' ').matchAll(/\b(\d{1,2}:\d{2}\s*(?:am|pm)?)/gi)].map(m => time24(m[1]));
+      pickTime = ts[0] || ''; retTime = ts[1] || '';
+    } else {
+      pickDate = parseDate((text.match(new RegExp(`pick-?\\s?up[^\\n]{0,20}?${DATE_RE.source}`, 'i')) || [])[1], year);
+      retDate = parseDate((text.match(new RegExp(`(?:return|drop-?\\s?off)[^\\n]{0,20}?${DATE_RE.source}`, 'i')) || [])[1], year);
+    }
+    const pickup = clean(under(/^(location|pick-?up location|pick-?up address)\b/i) || (text.match(/pick-?up\s*(?:location|address)\s*:?\s*([^\n]+)/i) || [])[1]);
+    const instr = under(/instructions/i), extras = under(/^extras\b/i, ', ');
+    const company = [brand, host].filter(Boolean).join(' · ');
+    return { company, car, plate, ref: bookingRef(text), pickup, pickDate, pickTime, retDate, retTime, dropoff: '', phone: '',
+      notes: [extras && `Extras: ${extras}`, instr].filter(Boolean).join(' · ') };
+  }
+
+  /* ---------- screenshots: rebuild lines and columns from recognised words ---------- */
+  // words: [{t: text, c: confidence, b: [x0, y0, x1, y1]}]
+  function wordsToText(words) {
+    const ws = words.filter(w => w.t && w.t.trim() && !(w.c < 45 && !/[A-Za-z0-9]{2}/.test(w.t)));
+    if (!ws.length) return { text: '', cols: '' };
+    const cy = w => (w.b[1] + w.b[3]) / 2, ht = w => w.b[3] - w.b[1];
+    // start from the recogniser's own lines (w.l), then put lines sitting side by side on one row
+    const groups = {};
+    ws.forEach((w, i) => (groups[w.l ?? 'w' + i] ||= []).push(w));
+    const lines = [];
+    Object.values(groups).map(g => {
+      const y0 = Math.min(...g.map(w => w.b[1])), y1 = Math.max(...g.map(w => w.b[3]));
+      return { cy: (y0 + y1) / 2, h: y1 - y0, ws: g };
+    }).sort((a, b) => a.cy - b.cy).forEach(g => {
+      const l = lines.find(l => Math.abs(l.cy - g.cy) < Math.min(g.h, l.h) * 0.5);
+      if (l) { l.ws.push(...g.ws); l.h = Math.max(l.h, g.h); } else lines.push(g);
+    });
+    const H = [...lines.map(l => l.h)].sort((a, b) => a - b)[lines.length >> 1] || 20;
+    const minX = Math.min(...ws.map(w => w.b[0])), maxX = Math.max(...ws.map(w => w.b[2])), maxY = Math.max(...ws.map(w => w.b[3]));
+    const mid = (minX + maxX) / 2;
+    // each line splits into segments wherever there is a wide gap (a second column)
+    const rows = lines.sort((a, b) => a.cy - b.cy).map(l => {
+      const segs = [];
+      l.ws.sort((a, b) => a.b[0] - b.b[0]).forEach(w => {
+        const s = segs.at(-1);
+        if (s && w.b[0] - s.x1 < H * 1.6) { s.t += ' ' + w.t; s.x1 = w.b[2]; } else segs.push({ t: w.t, x0: w.b[0], x1: w.b[2] });
+      });
+      return { cy: l.cy, segs };
+    }).filter((r, i) => !(i === 0 && r.cy < maxY * 0.06 && /^\d{1,2}:\d{2}\b/.test(r.segs[0].t)));  // phone status bar clock
+    const text = rows.map(r => r.segs.map(s => s.t).join('   ')).join('\n');
+    const left = rows.map(r => r.segs.filter(s => s.x0 < mid).map(s => s.t).join('   ')).filter(Boolean);
+    const right = rows.map(r => r.segs.filter(s => s.x0 >= mid).map(s => s.t).join('   ')).filter(Boolean);
+    return { text: text + '\n', cols: left.join('\n') + '\n\n' + right.join('\n') + '\n' };
+  }
+  // Text recognition often reads "+" as 4 or 1 in front of a country code
+  const COUNTRY = /^(84|60|65|66|62|63|33|44|61|81|82|86|91|852|971|974)/;
+  function fixPlus(p) {
+    const d = (p || '').replace(/[^\d+]/g, '');
+    if (!p || d.startsWith('+')) return p || '';
+    if (/^[41]/.test(d) && d.length >= 11 && d.length <= 14 && COUNTRY.test(d.slice(1))) return '+' + p.replace(/^\s*[41]\s*/, '');
+    return p;
+  }
+
+  // Everything found, as a list of bookings: [{kind, data}]
   function parseBooking({ text, cols }) {
+    const r = parseOne({ text, cols });
+    r.items = r.kind === 'flight' ? r.flights.map(d => ({ kind: 'flight', data: d }))
+      : r.kind === 'stay' ? [{ kind: 'stay', data: r.stay }]
+      : r.kind === 'car' ? [{ kind: 'car', data: r.car }]
+      : MODE_WORD[r.kind] ? r.legs.map(d => ({ kind: r.kind, data: d }))
+      : [];
+    return r;
+  }
+  function parseOne({ text, cols }) {
     const kind = detectKind(text);
+    if (kind === 'car') return { kind, car: parseCar(text) };
+    if (MODE_WORD[kind]) return { kind, legs: parseGround(text, kind) };
     if (kind === 'flight') {
       const hasLegs = /^\s*(leg|segment|sector)\s*\d+/im.test(text);
       const table = hasLegs ? [] : parseTableFlights(text);
@@ -257,6 +431,6 @@
     return { kind: 'other', other: { ref: bookingRef(text), date: parseDate((text.match(DATE_RE) || [])[0], yearIn(text)) } };
   }
 
-  const api = { parseBooking, parseDate, detectKind };
+  const api = { parseBooking, parseDate, detectKind, wordsToText, fixPlus };
   if (typeof module !== 'undefined') module.exports = api; else root.XKKParse = api;
 })(typeof window !== 'undefined' ? window : globalThis);

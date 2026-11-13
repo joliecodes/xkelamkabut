@@ -1,0 +1,19 @@
+{
+ "text": "agoda   Booking Confirmation\nov000   Please present either an electronic or paper copy of your hotel voucher upon check-in.\nBooking ID :   1234567890   Number of Rooms:   a\nNumber of Rooms :\nBooking Reference No :   ee\nClient :   Alex Traveller\nNumber of Adults :   2\nMember ID :   111222333\nNumber of Children :   °\nCountry of Residence :   Malaysia / Malaysia\nProperty :   Khach san Sunday Boutique (Sunday   Room 00MSYPE Type   :   Deluxe Twin i or Double Room TPT with Private\nHotel   Boutique Hotel)   Bathroom\nKhéch san Sunday Boutique   Promotion:\nLimited Time Offer. Price includes 20% discount!\nAddress :   D2-38-40, Diamond 2 Street, Khem\nBeach Resort, An Thai, Phi Quéc, Vigt   For Full Promotion details and conditions see confirmation email\nNam, Bai Khem, Phu Quoc Island,\nVietnam, 92513\nBai Khem, Dao Phi Quéc, Viét Nam\nProperty Contact Number :   484900000001\nHotel Contact Number\nCancellation Policy: Stay flexible! Cancel for free before 29 November 2026. Any cancellation received within 1 day prior to the arrival date will be charged for\nthe entire stay. Failure to arrive at your hotel or property wil be treated as a No-Show and will incur a charge of 100% of the booking value (Hotel policy).\nBenefits Included Breakfast, Coffee & tea, Parking, Drinking water, Free WiFi, Express check-in\nArrival :   November 30, 2026   Departure :   December 3, 2026\n",
+ "cols": "agoda\nov000   Please present either an electronic or paper copy of your hotel voucher upon check-in.\nBooking ID :   1234567890\nBooking Reference No :\nClient :   Alex Traveller\nMember ID :   111222333\nCountry of Residence :   Malaysia / Malaysia\nProperty :   Khach san Sunday Boutique (Sunday\nHotel   Boutique Hotel)\nKhéch san Sunday Boutique\nAddress :   D2-38-40, Diamond 2 Street, Khem\nBeach Resort, An Thai, Phi Quéc, Vigt\nNam, Bai Khem, Phu Quoc Island,\nVietnam, 92513\nBai Khem, Dao Phi Quéc, Viét Nam\nProperty Contact Number :   484900000001\nHotel Contact Number\nCancellation Policy: Stay flexible! Cancel for free before 29 November 2026. Any cancellation received within 1 day prior to the arrival date will be charged for\nthe entire stay. Failure to arrive at your hotel or property wil be treated as a No-Show and will incur a charge of 100% of the booking value (Hotel policy).\nBenefits Included Breakfast, Coffee & tea, Parking, Drinking water, Free WiFi, Express check-in\nArrival :   November 30, 2026   Departure :\n\nBooking Confirmation\nNumber of Rooms:   a\nNumber of Rooms :\nee\nNumber of Adults :   2\nNumber of Children :   °\nRoom 00MSYPE Type   :   Deluxe Twin i or Double Room TPT with Private\nBathroom\nPromotion:\nLimited Time Offer. Price includes 20% discount!\nFor Full Promotion details and conditions see confirmation email\nDecember 3, 2026\n",
+ "expected": {
+  "kind": "stay",
+  "stay": {
+   "name": "Sunday Boutique Hotel",
+   "address": "D2-38-40, Diamond 2 Street, Khem Beach Resort, An Thai, Phi Quéc, Vigt Nam, Bai Khem, Phu Quoc Island, Vietnam, 92513",
+   "phone": "+84900000001",
+   "ref": "1234567890",
+   "inDate": "2026-11-30",
+   "inTime": "",
+   "outDate": "2026-12-03",
+   "outTime": "",
+   "room": "Deluxe Twin or Double Room with Private Bathroom",
+   "notes": "Included: Breakfast, Coffee & tea, Parking, Drinking water, Free WiFi, Express check-in"
+  }
+ }
+}

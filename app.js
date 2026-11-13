@@ -266,6 +266,8 @@
     return out;
   }
 
+  // Transport blocks show what they are: plane, train, bus, ferry or car
+  const modeIcon = x => x.type !== 'transport' ? '' : x.mode ? ({ flight: 'plane', car: 'car', train: 'train', bus: 'bus', ferry: 'ferry' })[x.mode] : x.flight ? 'plane' : '';
   function itemEl(x, s, e) {
     const T = TYPES[x.type] || TYPES.other;
     const typeKey = TYPES[x.type] ? x.type : 'other';
@@ -273,7 +275,7 @@
     const el = document.createElement('div');
     el.className = 'item' + (mins <= 30 ? ' short' : '') + (mins >= 90 ? ' tall' : '');
     el.style.setProperty('--c', T.c); el.style.setProperty('--bg', T.bg);
-    el.innerHTML = `<div class="ic">${icon(typeKey)}</div>
+    el.innerHTML = `<div class="ic">${icon(modeIcon(x) || typeKey)}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>
       <div class="m">${x.flight ? flightMeta(x) : fmtTime(x.start) + (x.end ? ' – ' + fmtTime(x.end) : '')}</div></div>
       <div class="flags">${x.notes ? `<span title="Has notes">${icon('note')}</span>` : ''}${undecided(x) ? `<span class="optpill">${x.options.length} options</span>` : mapLink(effLoc(x), 'Map ↗', 'map')}</div>`;
@@ -296,14 +298,15 @@
     const k = TYPES[x.type] ? x.type : 'other', T = TYPES[k];
     const d = $('#viewDrawer');
     d.style.setProperty('--c', T.c); d.style.setProperty('--bg', T.bg);
-    $('#vBadge').innerHTML = icon(k);
+    $('#vBadge').innerHTML = icon(modeIcon(x) || k);
     $('#vType').textContent = T.label;
     $('#vTitle').textContent = x.title;
     if (x.flight) {
       const f = x.flight;
+      const air = !x.mode || x.mode === 'flight', len = f.dur > 0 ? fmtDur(f.dur) + (air ? ' flight' : ' journey') : '';
       $('#vTime').innerHTML = `<b>Departs</b> ${fmtTime(x.start)}${f.from ? ` ${esc(f.from)} time` : ''}`
-        + (f.arrTime ? `<br><b>Lands</b> ${fmtTime(f.arrTime)}${f.to ? ` ${esc(f.to)} time` : ''}${f.arrDate ? ', ' + esc(fmtDate(f.arrDate, { weekday: 'short', day: 'numeric', month: 'short' })) : ''}` : '')
-        + ([f.dur > 0 ? fmtDur(f.dur) + ' flight' : '', shiftText(f.shift)].filter(Boolean).length ? `<br><span class="muted">${[f.dur > 0 ? fmtDur(f.dur) + ' flight' : '', shiftText(f.shift)].filter(Boolean).join(' · ')}</span>` : '');
+        + (f.arrTime ? `<br><b>${air ? 'Lands' : 'Arrives'}</b> ${fmtTime(f.arrTime)}${f.to ? ` ${esc(f.to)} time` : ''}${f.arrDate ? ', ' + esc(fmtDate(f.arrDate, { weekday: 'short', day: 'numeric', month: 'short' })) : ''}` : '')
+        + ([len, shiftText(f.shift)].filter(Boolean).length ? `<br><span class="muted">${[len, shiftText(f.shift)].filter(Boolean).join(' · ')}</span>` : '');
     } else $('#vTime').textContent = fmtTime(x.start) + (x.end ? ' – ' + fmtTime(x.end) : '');
     $('#vNotesRow').hidden = !x.notes;
     $('#vNotes').textContent = x.notes || '';
@@ -743,8 +746,19 @@
   const shiftText = s => !s ? '' : `clocks go ${s < 0 ? 'back' : 'forward'} ${Math.abs(s) % 60 ? fmtDur(Math.abs(s)) : Math.abs(s) / 60 + ' hr'}`;
 
   /* ---------- bookings ---------- */
+  const BOOK_C = { c: '#5b7fa6', bg: '#ecf1f7' };
+  const ground = (label, ic, eg) => ({ label, icon: ic, ...BOOK_C, fields: [
+    ['operator', 'Operator', 'text', eg.op],
+    [['number', `${label} number`, 'text', eg.no], ['ref', 'Booking ref', 'text', '']],
+    [['from', 'From', 'text', eg.from], ['to', 'To', 'text', eg.to]],
+    [['depDate', 'Departure date', 'date'], ['depTime', 'Departure time', 'time']],
+    [['arrDate', 'Arrival date', 'date'], ['arrTime', 'Arrival time', 'time']],
+    [['duration', 'Journey time', 'text', 'e.g. 2h 7m'], ['passengers', 'Passengers', 'text', 'e.g. 3']],
+    ['seats', 'Seats', 'text', eg.seat],
+    ['notes', 'Notes', 'textarea', 'Platform, luggage, anything else'],
+  ] });
   const BOOK = {
-    flight: { label: 'Flight', icon: 'plane', c: '#5b7fa6', bg: '#ecf1f7', desc: 'Airline, route, times, seats', fields: [
+    flight: { label: 'Flight', icon: 'plane', ...BOOK_C, fields: [
       ['airline', 'Airline', 'text', 'e.g. AirAsia'],
       [['flightNo', 'Flight number', 'text', 'e.g. AK 545'], ['ref', 'Booking ref', 'text', 'e.g. GBSEQC']],
       [['from', 'From', 'text', 'e.g. KUL'], ['to', 'To', 'text', 'e.g. PQC']],
@@ -754,6 +768,19 @@
       [['seats', 'Seats', 'text', 'e.g. 27E, 27F'], ['baggage', 'Baggage', 'text', 'e.g. 20kg checked']],
       ['notes', 'Notes', 'textarea', 'Terminal, meals, anything else'],
     ] },
+    car: { label: 'Car rental', icon: 'car', ...BOOK_C, fields: [
+      [['company', 'Rental company', 'text', 'e.g. Turo · host'], ['ref', 'Booking ref', 'text', '']],
+      [['car', 'Car', 'text', 'e.g. Mercedes-Benz CLA'], ['plate', 'Plate', 'text', 'e.g. FP-017-DE']],
+      ['pickup', 'Pick-up location', 'text', 'Address or meeting point'],
+      [['pickDate', 'Pick-up date', 'date'], ['pickTime', 'Pick-up time', 'time']],
+      [['retDate', 'Return date', 'date'], ['retTime', 'Return time', 'time']],
+      ['dropoff', 'Return location', 'text', 'Leave empty if same as pick-up'],
+      ['phone', 'Phone', 'tel', ''],
+      ['notes', 'Notes', 'textarea', 'Extras, key handover, fuel'],
+    ] },
+    train: ground('Train', 'train', { op: 'e.g. OUIGO', no: 'e.g. 7613', from: 'e.g. Paris Montparnasse', to: 'e.g. Bordeaux Saint-Jean', seat: 'e.g. Coach 4, seats 51–53' }),
+    bus: ground('Bus', 'bus', { op: 'e.g. FlixBus', no: '', from: 'e.g. TBS', to: 'e.g. Melaka Sentral', seat: 'e.g. 12A' }),
+    ferry: ground('Ferry', 'ferry', { op: 'e.g. Superdong', no: '', from: 'e.g. Rach Gia', to: 'e.g. Phu Quoc', seat: '' }),
     stay: { label: 'Stay', icon: 'hotel', c: '#9a6fb0', bg: '#f3edf7', desc: 'Hotel, address, check-in and out', fields: [
       ['name', 'Name', 'text', 'e.g. Sunday Boutique Hotel'],
       ['address', 'Address', 'text', 'Street, area, city'],
@@ -763,7 +790,7 @@
       ['room', 'Room', 'text', 'e.g. Deluxe Twin'],
       ['notes', 'Notes', 'textarea', 'Breakfast, Wi-Fi, anything else'],
     ] },
-    other: { label: 'Other', icon: 'other', c: '#c4902e', bg: '#fbf4e4', desc: 'Tours, car rental, tickets', fields: [
+    other: { label: 'Other', icon: 'other', c: '#c4902e', bg: '#fbf4e4', desc: 'Tours, tickets, anything else', fields: [
       ['title', 'What is it?', 'text', 'e.g. Island hopping tour'],
       [['date', 'Date', 'date'], ['time', 'Time', 'time']],
       [['ref', 'Booking ref', 'text', ''], ['phone', 'Phone', 'tel', '']],
@@ -771,8 +798,30 @@
       ['notes', 'Notes', 'textarea', ''],
     ] },
   };
+  // Flights, car rental, buses, trains and ferries all sit under Transport
+  const TRANSPORT = ['flight', 'car', 'train', 'bus', 'ferry'], GROUND = ['train', 'bus', 'ferry'];
+  const groupOf = k => TRANSPORT.includes(k) ? 'transport' : k;
+  const KINDS = { transport: { label: 'Transport', icon: 'transport', ...BOOK_C, desc: 'Flight, car rental, bus, train, ferry' }, stay: BOOK.stay, other: BOOK.other };
+  // The same detail under each form's own name, kept when switching between Flight, Train, Car rental…
+  const ALIAS = [['depDate', 'pickDate'], ['depTime', 'pickTime'], ['arrDate', 'retDate'], ['arrTime', 'retTime'], ['from', 'pickup'], ['airline', 'operator', 'company'], ['flightNo', 'number']];
+  function convert(d) {
+    const out = { ...d };
+    ALIAS.forEach(g => { const v = g.map(k => d[k]).find(Boolean); if (v) g.forEach(k => { if (!out[k]) out[k] = v; }); });
+    return out;
+  }
+  // When it happens, for sorting and for spotting the same booking uploaded twice
+  const whenOf = (k, d) => k === 'car' ? [d.pickDate, d.pickTime] : k === 'stay' ? [d.inDate, d.inTime] : k === 'other' ? [d.date, d.time] : [d.depDate, d.depTime];
+  const normNo = s => (s || '').replace(/\s+/g, '').toUpperCase();
+  function sameTrip(k, a, b) {
+    const [ad, at] = whenOf(k, a), [bd, bt] = whenOf(k, b);
+    if (!ad || ad !== bd) return false;
+    if (k === 'flight' && a.flightNo && b.flightNo) return normNo(a.flightNo) === normNo(b.flightNo);
+    if (k === 'stay') return !!((a.ref && a.ref === b.ref) || (a.name && b.name && a.name.toLowerCase() === b.name.toLowerCase()) || (a.outDate && a.outDate === b.outDate));
+    if (k === 'other') return at === bt && (a.title || '') === (b.title || '');
+    return !at || !bt || at === bt;
+  }
   const bForm = $('#bookForm');
-  let bEditing = null, bKind = 'flight', bQueue = [], bFilter = 'all', bTotal = 0, bIndex = 0;
+  let bEditing = null, bKind = 'flight', bQueue = [], bFilter = 'all', bTotal = 0, bIndex = 0, bCur = null, bMatched = false;
 
   const shortDate = iso => iso ? fmtDate(iso, { weekday: 'short', day: 'numeric', month: 'short' }) : '';
   const nights = (a, b) => (a && b) ? Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5) : 0;
@@ -782,21 +831,21 @@
     const list = $('#bookList'), all = trip.bookings;
     $('#bookFilters').hidden = !all.length;
     if (!all.length) {
-      list.innerHTML = `<div class="pempty"><div class="big" style="color:var(--sea)">${icon('plane')}</div><p><b>No bookings yet</b></p><p class="muted">Add flights and stays by hand, or upload a confirmation PDF.</p><button type="button" class="btn" id="bookBegin">Add booking</button></div>`;
+      list.innerHTML = `<div class="pempty"><div class="big" style="color:var(--sea)">${icon('plane')}</div><p><b>No bookings yet</b></p><p class="muted">Add flights, trains, car rentals and stays by hand, or upload confirmations and screenshots.</p><button type="button" class="btn" id="bookBegin">Add booking</button></div>`;
       $('#bookBegin').onclick = () => openBooking(null);
       return;
     }
-    const sortKey = b => (b.depDate || b.inDate || b.date || '9') + (b.depTime || b.inTime || b.time || '');
-    const groups = [['flight', 'Flights'], ['stay', 'Stays'], ['other', 'Other']];
+    const sortKey = b => { const [d, t] = whenOf(b.kind, b); return (d || '9') + (t || ''); };
+    const groups = [['transport', 'Transport'], ['stay', 'Stays'], ['other', 'Other']];
     // Filter cards: All first, then only the kinds that exist
-    const kinds = groups.filter(([k]) => all.some(b => b.kind === k));
+    const kinds = groups.filter(([k]) => all.some(b => groupOf(b.kind) === k));
     if (bFilter !== 'all' && !kinds.some(([k]) => k === bFilter)) bFilter = 'all';
-    $('#bookFilters').innerHTML = [['all', 'All', all.length], ...kinds.map(([k, l]) => [k, l, all.filter(b => b.kind === k).length])]
+    $('#bookFilters').innerHTML = [['all', 'All', all.length], ...kinds.map(([k, l]) => [k, l, all.filter(b => groupOf(b.kind) === k).length])]
       .map(([k, l, n]) => `<button type="button" data-f="${k}" class="${k === bFilter ? 'on' : ''}"><b>${l}</b><span>${n}</span></button>`).join('');
     $('#bookFilters').querySelectorAll('button').forEach(btn => btn.onclick = () => { bFilter = btn.dataset.f; renderBookings(); });
     list.innerHTML = groups.map(([k, label]) => {
       if (bFilter !== 'all' && bFilter !== k) return '';
-      const items = all.filter(b => b.kind === k).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+      const items = all.filter(b => groupOf(b.kind) === k).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
       return items.length ? `<div class="bsect">${label}</div>${items.map(bookingCard).join('')}` : '';
     }).join('');
     list.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openBooking(trip.bookings.find(x => x.id === b.dataset.edit)));
@@ -815,6 +864,18 @@
       <div class="mid">${icon('plane')}</div>
       <div class="end"><div class="code">${esc(b.to || '—')}</div><div class="tm">${fmtTime(b.arrTime)}</div><div class="city">${esc(b.toCity || '')}${b.arrDate && b.arrDate !== b.depDate ? ' · ' + shortDate(b.arrDate) : ''}</div></div></div>
       ${kv('Booking ref', b.ref, copyBtn(b.ref || ''))}${kv('Seats', b.seats)}${kv('Baggage', b.baggage)}${kv('Notes', b.notes, '', 'note')}</div>`;
+    if (GROUND.includes(b.kind)) return `<div class="bcard" ${style}>${head([b.operator, b.number].filter(Boolean).join(' · ') || K.label, shortDate(b.depDate))}
+      <div class="route long"><div class="end"><div class="code">${esc(b.from || '—')}</div><div class="tm">${fmtTime(b.depTime)}</div></div>
+      <div class="mid">${icon(K.icon)}</div>
+      <div class="end"><div class="code">${esc(b.to || '—')}</div><div class="tm">${fmtTime(b.arrTime)}</div><div class="city">${b.arrDate && b.arrDate !== b.depDate ? shortDate(b.arrDate) : ''}</div></div></div>
+      ${kv('Booking ref', b.ref, copyBtn(b.ref || ''))}${kv('Journey time', b.duration)}${kv('Passengers', b.passengers)}${kv('Seats', b.seats)}${kv('Notes', b.notes, '', 'note')}</div>`;
+    if (b.kind === 'car') {
+      const n = nights(b.pickDate, b.retDate);
+      return `<div class="bcard" ${style}>${head(b.car || 'Car rental', [b.company, n ? `${n} day${n > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · '))}
+      <div class="stayd"><div><small>Pick-up</small><b>${shortDate(b.pickDate) || '—'}</b><span>${fmtTime(b.pickTime)}</span></div><div><small>Return</small><b>${shortDate(b.retDate) || '—'}</b><span>${fmtTime(b.retTime)}</span></div></div>
+      ${kv('Pick-up', b.pickup)}${kv('Return to', b.dropoff)}${kv('Plate', b.plate)}${kv('Booking ref', b.ref, copyBtn(b.ref || ''))}${kv('Phone', b.phone, b.phone ? callBtn(b.phone) + copyBtn(b.phone) : '')}${kv('Notes', b.notes, '', 'note')}
+      ${b.pickup ? mapLink({ query: b.pickup }, 'Open in Maps ↗', 'btn primary') : ''}</div>`;
+    }
     if (b.kind === 'stay') {
       const n = nights(b.inDate, b.outDate);
       return `<div class="bcard" ${style}>${head(b.name || 'Stay', n ? `${n} night${n > 1 ? 's' : ''}` : '')}
@@ -829,21 +890,34 @@
 
   // Drawer: step 1 pick a kind (or upload), step 2 the form
   function openBooking(b, prefill) {
-    bEditing = b; $('#bfound').hidden = true; $('#bprog').hidden = true;
+    bEditing = b; bMatched = false; bCur = null; $('#bfound').hidden = true; $('#bprog').hidden = true;
     if (b) bTotal = 0;
     if (b || prefill) { bKind = b?.kind || prefill.kind; bStep2(b || prefill.data, !!prefill); }
     else bStep1();
     show('#bookDrawer');
   }
   function bStep1() {
-    $('#bcards').innerHTML = Object.entries(BOOK).map(([k, K]) => `<button type="button" data-k="${k}" style="--c:${K.c};--bg:${K.bg}"><span class="ci">${icon(K.icon)}</span><span><b>${K.label}</b><small>${K.desc}</small></span></button>`).join('');
-    $('#bcards').querySelectorAll('button').forEach(btn => btn.onclick = () => { bKind = btn.dataset.k; bStep2({}); });
+    $('#bcards').innerHTML = Object.entries(KINDS).map(([k, K]) => `<button type="button" data-k="${k}" style="--c:${K.c};--bg:${K.bg}"><span class="ci">${icon(K.icon)}</span><span><b>${K.label}</b><small>${K.desc}</small></span></button>`).join('');
+    $('#bcards').querySelectorAll('button').forEach(btn => btn.onclick = () => { bKind = btn.dataset.k === 'transport' ? 'flight' : btn.dataset.k; bStep2({}); });
     $('#bstep1').classList.add('on'); $('#bstep2').classList.remove('on');
   }
-  function bStep2(data, fromPdf) {
+  let bFromFile = false;
+  const srcWord = src => src === 'files' ? 'your files' : `your ${src || 'PDF'}`;
+  // opts.added: only these fields were filled in from the file (updating a booking you already have)
+  function bStep2(data, fromPdf, opts = {}) {
     const K = BOOK[bKind];
+    bFromFile = !!fromPdf;
     $('#bbadge').style.setProperty('--c', K.c); $('#bbadge').style.setProperty('--bg', K.bg); $('#bbadge').innerHTML = icon(K.icon);
-    $('#btitle').textContent = `${bEditing ? 'Edit' : 'New'} ${K.label}`;
+    $('#btitle').textContent = `${bMatched ? 'Update' : bEditing ? 'Edit' : 'New'} ${K.label}`;
+    // Flight · Car rental · Bus · Train · Ferry
+    const modes = $('#bmodes');
+    modes.hidden = !TRANSPORT.includes(bKind);
+    modes.innerHTML = TRANSPORT.map(k => `<button type="button" data-m="${k}" class="${k === bKind ? 'on' : ''}">${icon(BOOK[k].icon)}<span>${BOOK[k].label}</span></button>`).join('');
+    modes.querySelectorAll('button').forEach(btn => btn.onclick = () => {
+      if (btn.dataset.m === bKind) return;
+      const now = {}; $('#bfields').querySelectorAll('input,textarea').forEach(el => now[el.name] = el.value.trim());
+      bKind = btn.dataset.m; bStep2(convert(now), bFromFile, { keepFound: true });
+    });
     const field = ([name, label, type, ph = '']) => type === 'textarea'
       ? `<label>${label}<textarea name="${name}" rows="2" placeholder="${esc(ph)}"></textarea></label>`
       : `<label>${label}<input name="${name}" type="${type}" placeholder="${esc(ph)}"></label>`;
@@ -852,48 +926,64 @@
     $('#bfields').querySelectorAll('input,textarea').forEach(el => {
       const v = data[el.name] || '';
       el.value = v;
-      if (fromPdf && v) { el.classList.add('filled'); filled++; }
+      if (fromPdf && v && (!opts.added || opts.added.includes(el.name))) { el.classList.add('filled'); filled++; }
       el.addEventListener('input', () => el.classList.remove('filled'), { once: true });
     });
-    // "Flight 2 of 4 · DXB → CDG" while working through a multi-booking PDF
+    // "Train 2 of 4 · Paris Montparnasse → Bordeaux Saint-Jean" while working through several bookings
     const many = fromPdf && bTotal > 1;
     $('#bprog').hidden = !many;
     if (many) {
-      const route = bKind === 'flight' && (data.from || data.to) ? ` <span>·</span> ${esc(data.from || '?')} → ${esc(data.to || '?')}` : '';
+      const route = (data.from || data.to) && bKind !== 'car' ? ` <span>·</span> ${esc(data.from || '?')} → ${esc(data.to || '?')}` : '';
       $('#bprog').innerHTML = `${BOOK[bKind].label} ${bIndex} of ${bTotal}${route}`;
     }
-    if (fromPdf) {
-      $('#bfound').hidden = false;
-      $('#bfound').innerHTML = filled
-        ? `<b>Filled in ${filled} field${filled > 1 ? 's' : ''} from your PDF.</b> Check the highlighted ones before saving.`
-        : `<b>Couldn't find details in this PDF.</b> Please fill them in by hand.`;
-    }
+    if (fromPdf && !opts.keepFound) {
+      const from = srcWord(bCur?.src), f = $('#bfound');
+      f.hidden = false; f.classList.toggle('same', bMatched);
+      f.innerHTML = bMatched
+        ? `<b>You already have this booking.</b> ${filled ? `Added ${filled} missing detail${filled > 1 ? 's' : ''} from ${from} (highlighted).` : `Nothing new in ${from}.`} Saving updates it. <button type="button" class="linkbtn" id="bAsNew">Save as a new booking instead</button>`
+        : filled ? `<b>Filled in ${filled} field${filled > 1 ? 's' : ''} from ${from}.</b> Check the highlighted ones before saving.`
+        : `<b>Couldn't find details in ${from}.</b> Please fill them in by hand.`;
+      const asNew = $('#bAsNew');
+      if (asNew) asNew.onclick = () => { bEditing = null; bMatched = false; bStep2(bCur.data, true); };
+    } else if (!fromPdf) $('#bfound').hidden = true;
     // Arrival before departure on the same day is usually a misread time
-    if (bKind === 'flight' && data.depDate && data.depDate === data.arrDate && data.depTime && data.arrTime && data.arrTime < data.depTime) {
+    if ((bKind === 'flight' || GROUND.includes(bKind)) && data.depDate && data.depDate === data.arrDate && data.depTime && data.arrTime && data.arrTime < data.depTime) {
       bForm.arrTime.classList.add('warn');
       $('#bfound').hidden = false;
-      $('#bfound').insertAdjacentHTML('beforeend', '<br><b>Check the arrival time:</b> it looks earlier than departure.');
+      if (!/Check the arrival time/.test($('#bfound').innerHTML)) $('#bfound').insertAdjacentHTML('beforeend', '<br><b>Check the arrival time:</b> it looks earlier than departure.');
       bForm.arrTime.addEventListener('input', () => bForm.arrTime.classList.remove('warn'), { once: true });
     }
     updateReminder();
     $('#bsync').checked = bEditing ? !!bEditing.itemIds?.length : true;
-    $('#bdel').hidden = !bEditing; $('#bdel').textContent = 'Delete'; $('#bdel').dataset.armed = '';
+    $('#bdel').hidden = !bEditing || bMatched; $('#bdel').textContent = 'Delete'; $('#bdel').dataset.armed = '';
     $('#bstep2').classList.add('on'); $('#bstep1').classList.remove('on');
+  }
+  // Show one booking found in a file: as an update if it's already saved, otherwise as new
+  function showFound(item) {
+    bCur = item; bKind = item.kind; bPrefillExtra = item.data;
+    const match = trip.bookings.find(b => b.kind === item.kind && sameTrip(item.kind, b, item.data));
+    bEditing = match || null; bMatched = !!match;
+    if (!match) return bStep2(item.data, true);
+    const merged = { ...match }, added = [];
+    Object.entries(item.data).forEach(([k, v]) => { if (v && !match[k]) { merged[k] = v; added.push(k); } });
+    bStep2(merged, true, { added });
   }
   // "Flight 2 of 4 · EK 071 · DXB → CDG · Thu 26 Feb" just above Save, kept in sync with the form
   function updateReminder() {
     const many = !bEditing && bTotal > 1, fromPdf = !$('#bfound').hidden, v = n => bForm[n]?.value.trim() || '';
     const parts = [];
     if (bKind === 'flight') parts.push(v('flightNo') && `<b>${esc(v('flightNo'))}</b>`, (v('from') || v('to')) && `${esc(v('from') || '?')} → ${esc(v('to') || '?')}`, v('depDate') && shortDate(v('depDate')));
+    else if (GROUND.includes(bKind)) parts.push((v('number') || v('operator')) && `<b>${esc(v('number') || v('operator'))}</b>`, (v('from') || v('to')) && `${esc(v('from') || '?')} → ${esc(v('to') || '?')}`, v('depDate') && shortDate(v('depDate')));
+    else if (bKind === 'car') parts.push(v('car') && `<b>${esc(v('car'))}</b>`, v('pickDate') && `${fmtDate(v('pickDate'), { day: 'numeric', month: 'short' })}${v('retDate') ? '–' + fmtDate(v('retDate'), { day: 'numeric', month: 'short' }) : ''}`);
     else if (bKind === 'stay') parts.push(v('name') && `<b>${esc(v('name'))}</b>`, v('inDate') && `${fmtDate(v('inDate'), { day: 'numeric', month: 'short' })}${v('outDate') ? '–' + fmtDate(v('outDate'), { day: 'numeric', month: 'short' }) : ''}`);
     else parts.push(v('title') && `<b>${esc(v('title'))}</b>`, v('date') && shortDate(v('date')));
     const lead = many ? `${BOOK[bKind].label} ${bIndex} of ${bTotal}` : BOOK[bKind].label;
     $('#bremind').innerHTML = [lead, ...parts.filter(Boolean)].join(' · ');
     $('#bremind').hidden = !(many || fromPdf);
-    $('#bsave').textContent = many && bIndex < bTotal ? 'Save & next' : 'Save';
+    $('#bsave').textContent = (bMatched ? 'Update' : 'Save') + (many && bIndex < bTotal ? ' & next' : '');
   }
   $('#bfields').addEventListener('input', () => updateReminder());
-  $('#bback').onclick = () => { if (!bEditing) bStep1(); else hide(); };
+  $('#bback').onclick = () => { if (!bEditing || bMatched) { bEditing = null; bMatched = false; bStep1(); } else hide(); };
   $('#addBooking').onclick = () => { bQueue = []; bTotal = 0; openBooking(null); };
 
   bForm.addEventListener('submit', e => {
@@ -901,13 +991,17 @@
     const data = { kind: bKind };
     $('#bfields').querySelectorAll('input,textarea').forEach(el => data[el.name] = el.value.trim());
     let b = bEditing;
-    if (b) { unlinkBooking(b); Object.keys(b).forEach(k => { if (!['id', 'itemIds', 'fromCity', 'toCity'].includes(k)) delete b[k]; }); Object.assign(b, data); }
+    if (b) {
+      unlinkBooking(b); Object.keys(b).forEach(k => { if (!['id', 'itemIds', 'fromCity', 'toCity'].includes(k)) delete b[k]; }); Object.assign(b, data);
+      if (bMatched) { b.fromCity ||= bPrefillExtra.fromCity || ''; b.toCity ||= bPrefillExtra.toCity || ''; }
+    }
     else { b = { id: uid(), itemIds: [], ...data, fromCity: bPrefillExtra.fromCity || '', toCity: bPrefillExtra.toCity || '' }; trip.bookings.push(b); }
     const skipped = $('#bsync').checked ? linkBooking(b) : [];
     save(); renderBookings(); renderGrid();
-    toast(skipped.length ? `Saved. Not added to itinerary: ${skipped.join(', ')}` : 'Saved');
-    if (bQueue.length) { const next = bQueue.shift(); bIndex++; bEditing = null; bPrefillExtra = next.data; bKind = next.kind; bStep2(next.data, true); }
-    else hide();
+    const word = bMatched ? 'Updated' : 'Saved';
+    toast(skipped.length ? `${word}. Not added to itinerary: ${skipped.join(', ')}` : word);
+    if (bQueue.length) { bIndex++; showFound(bQueue.shift()); }
+    else { bMatched = false; hide(); }
   });
   $('#bdel').onclick = e => {
     const btn = e.currentTarget;
@@ -945,11 +1039,25 @@
       const sameDay = !b.arrDate || b.arrDate === b.depDate;
       const end = sameDay && b.arrTime && toMin(b.arrTime) > toMin(b.depTime) ? b.arrTime : '';
       add(b.depDate, b.depTime, {
-        type: 'transport', end,
+        type: 'transport', mode: 'flight', end,
         title: ['Flight', b.flightNo, b.from && b.to ? `· ${b.from} → ${b.to}` : b.to ? `to ${b.to}` : ''].filter(Boolean).join(' '),
         notes: [b.ref && 'Ref ' + b.ref, b.seats && 'Seats ' + b.seats].filter(Boolean).join(' · '),
         flight: { from: b.from || '', to: b.to || '', arrTime: b.arrTime || '', arrDate: sameDay ? '' : b.arrDate, dur: fi.dur ?? null, shift: fi.shift ?? null },
       }, 'flight');
+    } else if (b.kind === 'car') {
+      const what = b.car || 'car', ref = [b.ref && 'Ref ' + b.ref, b.plate && 'Plate ' + b.plate].filter(Boolean).join(' · ');
+      add(b.pickDate, b.pickTime || '10:00', { type: 'transport', mode: 'car', title: `Pick up ${what}`, maps: b.pickup ? gq(b.pickup) : '', notes: ref }, 'car pick-up');
+      add(b.retDate, b.retTime || '10:00', { type: 'transport', mode: 'car', title: `Return ${what}`, maps: (b.dropoff || b.pickup) ? gq(b.dropoff || b.pickup) : '' }, 'car return');
+    } else if (GROUND.includes(b.kind)) {
+      // One block from departure to arrival
+      const K = BOOK[b.kind], sameDay = !b.arrDate || b.arrDate === b.depDate;
+      const end = sameDay && b.arrTime && toMin(b.arrTime) > toMin(b.depTime) ? b.arrTime : '';
+      add(b.depDate, b.depTime, {
+        type: 'transport', mode: b.kind, end,
+        title: [K.label, b.number, b.from && b.to ? `· ${b.from} → ${b.to}` : b.to ? `to ${b.to}` : ''].filter(Boolean).join(' '),
+        notes: [b.ref && 'Ref ' + b.ref, b.seats && 'Seats ' + b.seats].filter(Boolean).join(' · '),
+        ...(end || !b.arrTime ? {} : { flight: { from: '', to: '', arrTime: b.arrTime, arrDate: sameDay ? '' : b.arrDate, dur: parseDur(b.duration), shift: null } }),
+      }, K.label.toLowerCase());
     } else if (b.kind === 'stay') {
       const maps = (b.name || b.address) ? gq([b.name, b.address].filter(Boolean).join(', ')) : '';
       add(b.inDate, b.inTime || '14:00', { type: 'rest', title: `Check in · ${b.name || 'Stay'}`, maps, notes: b.ref ? 'Booking ID ' + b.ref : '' }, 'check-in');
@@ -1007,9 +1115,16 @@
     let done = 0;
     const worker = await T.createWorker('eng', 1, { ...((window.XKK_OCR || {}).options || {}), logger: m => { if (m.status === 'recognizing text') onProgress((done + m.progress) / images.length); } });
     let text = '';
-    for (const img of images) { const { data } = await worker.recognize(img); text += data.text + '\n'; done++; }
+    let cols = '';
+    for (const img of images) {
+      const { data } = await worker.recognize(img);
+      // rebuild lines and columns from where each word sits on the image
+      const words = (data.lines || []).flatMap((l, i) => (l.words || []).map(w => ({ t: w.text, c: w.confidence, l: i, b: [w.bbox.x0, w.bbox.y0, w.bbox.x1, w.bbox.y1] })));
+      const r = words.length ? window.XKKParse.wordsToText(words) : { text: data.text, cols: data.text };
+      text += r.text + '\n'; cols += r.cols + '\n'; done++;
+    }
     await worker.terminate();
-    return { text, cols: text };
+    return { text, cols };
   }
   async function pdfPagesToImages(buf) {
     const lib = await loadPdfJs(), doc = await lib.getDocument({ data: buf }).promise, out = [];
@@ -1039,22 +1154,40 @@
 
   let uploadFrom = null;
   ['uploadPdf1', 'uploadPdf2'].forEach(id => $('#' + id).onclick = () => { uploadFrom = id; $('#pdfInput').value = ''; $('#pdfInput').click(); });
+  // One or more files: read each, put everything found in one queue ("Train 1 of 2"),
+  // and fold together the same trip seen in two files (an email and an app screen)
   $('#pdfInput').addEventListener('change', async e => {
-    const file = e.target.files[0]; if (!file) return;
+    const files = [...e.target.files]; if (!files.length) return;
     const btn = $('#' + uploadFrom); btn.classList.add('busy');
     const label = btn.querySelector('b'), was = label.textContent;
+    const found = [];
+    let failed = 0, lastErr = null;
     try {
-      const r = window.XKKParse.parseBooking(await fileToText(file, t => label.textContent = t));
-      const found = r.kind === 'flight' ? r.flights.map(f => ({ kind: 'flight', data: f }))
-        : r.kind === 'stay' ? [{ kind: 'stay', data: r.stay }]
-        : [{ kind: uploadFrom === 'uploadPdf2' ? bKind : 'other', data: r.other || {} }];
-      if (!found.length) found.push({ kind: uploadFrom === 'uploadPdf2' ? bKind : 'flight', data: {} });
-      bTotal = found.length; bIndex = 1;
-      const first = found.shift(); bQueue = found;
-      bEditing = null; bPrefillExtra = first.data; bKind = first.kind;
-      bStep2(first.data, true);
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i], src = /pdf/i.test(f.type) || /\.pdf$/i.test(f.name) ? 'PDF' : 'screenshot';
+        const pre = files.length > 1 ? `${i + 1} of ${files.length} · ` : '';
+        try {
+          const r = window.XKKParse.parseBooking(await fileToText(f, t => label.textContent = pre + t));
+          if (r.items.length) r.items.forEach(x => found.push({ ...x, data: { ...x.data }, src }));
+          else found.push({ kind: uploadFrom === 'uploadPdf2' ? bKind : 'other', data: r.other || {}, src });
+        } catch (err) { failed++; lastErr = err; }
+      }
+      if (!found.length) throw lastErr || new Error('nothing');
+      const list = [];
+      found.forEach(x => {
+        const m = list.find(y => y.kind === x.kind && sameTrip(x.kind, y.data, x.data));
+        if (!m) return list.push(x);
+        Object.entries(x.data).forEach(([k, v]) => { if (v && !m.data[k]) m.data[k] = v; });
+        if (m.src !== x.src) m.src = 'files';
+      });
+      const key = x => whenOf(x.kind, x.data).join(' ') || '9';
+      if (list.length > 1 && list.every(x => x.data && Object.values(x.data).some(Boolean))) list.sort((a, b) => key(a).localeCompare(key(b)));
+      if (failed) toast(`Couldn't read ${failed} of ${files.length} files`);
+      bTotal = list.length; bIndex = 1;
+      bQueue = list.slice(1);
+      showFound(list[0]);
     } catch (err) {
-      toast(/OCR/.test(err.message) ? 'Text recognition needs an internet connection the first time.' : "Couldn't read that file. Try another, or fill in by hand.");
+      toast(/OCR/.test(err?.message) ? 'Text recognition needs an internet connection the first time.' : `Couldn't read ${files.length > 1 ? 'those files' : 'that file'}. Try another, or fill in by hand.`);
     } finally { btn.classList.remove('busy'); label.textContent = was; }
   });
 
@@ -1095,7 +1228,7 @@
       const [c, bg] = PALETTE[t.color % PALETTE.length], [a, b] = tripRange(t);
       const dates = a ? `${fmtDate(a, { day: 'numeric', month: 'short' })} – ${fmtDate(b, { day: 'numeric', month: 'short', year: 'numeric' })}` : '';
       return `<div class="tcard${t.id === db.current ? ' cur' : ''}${past.includes(t) ? ' past' : ''}" data-id="${t.id}" style="--c:${c};--bg:${bg}">
-        <span class="tc-ic">${icon('map')}</span>
+        <span class="tc-ic">${icon('map')}${t.id === db.current ? `<span class="tick" aria-label="Selected">${icon('check')}</span>` : ''}</span>
         <span class="tc-b"><b>${esc(t.title || 'My trip')}</b><small>${dates}${dates ? ' · ' : ''}${t.days.length} day${t.days.length === 1 ? '' : 's'}</small><span class="when">${whenLabel(t)}</span></span>
         <button type="button" class="round" data-menu="${t.id}" aria-label="Trip options">${icon('more')}</button></div>`;
     };

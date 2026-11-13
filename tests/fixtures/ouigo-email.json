@@ -1,0 +1,39 @@
+{
+ "text": "—   °\n<   mw   &   ee\nTo retrieve your ticket, get more details about your\nbooking, add to it, change it or cancel it, log in to your\naccount My Trip.\nYour   Paris Montparnasse\n£148.00\njourney Bordeaux Saint-Jean\nOutbound: Saturday, 30 January 2027 at 12:39\nReturn: Saturday, 13 February 2027 at 11:58\nReference\nQXT7KP\nName\nTraveller\n3 passengers\nMy OUIGO ticket for reference QXT7KP\nYour ticket will be sent to you by email 4 days\nbefore departure. You will be asked to show your ID\nand either your mobile e-ticket or a printed ticket\nbefore boarding. The ticket cannot be printed in a\nstation.\nBoarding on OUIGO Grande Vitesse\nYou can board 30 minutes before departure and up to 5\nminutes before the train leaves.\n",
+ "cols": "<\nTo retrieve your ticket, get more details about your\nbooking, add to it, change it or cancel it, log in to your\naccount My Trip.\nYour   Paris Montparnasse\njourney Bordeaux Saint-Jean\nOutbound: Saturday, 30 January 2027 at 12:39\nReturn: Saturday, 13 February 2027 at 11:58\nReference\nQXT7KP\nName\nTraveller\n3 passengers\nMy OUIGO ticket for reference QXT7KP\nYour ticket will be sent to you by email 4 days\nbefore departure. You will be asked to show your ID\nand either your mobile e-ticket or a printed ticket\nbefore boarding. The ticket cannot be printed in a\nstation.\nBoarding on OUIGO Grande Vitesse\nYou can board 30 minutes before departure and up to 5\nminutes before the train leaves.\n\n—   °\nmw   &   ee\n£148.00\n",
+ "expected": {
+  "kind": "train",
+  "legs": [
+   {
+    "operator": "OUIGO",
+    "number": "",
+    "ref": "QXT7KP",
+    "from": "Paris Montparnasse",
+    "to": "Bordeaux Saint-Jean",
+    "depDate": "2027-01-30",
+    "depTime": "12:39",
+    "arrDate": "",
+    "arrTime": "",
+    "duration": "",
+    "passengers": "3",
+    "seats": "",
+    "notes": ""
+   },
+   {
+    "operator": "OUIGO",
+    "number": "",
+    "ref": "QXT7KP",
+    "from": "Bordeaux Saint-Jean",
+    "to": "Paris Montparnasse",
+    "depDate": "2027-02-13",
+    "depTime": "11:58",
+    "arrDate": "",
+    "arrTime": "",
+    "duration": "",
+    "passengers": "3",
+    "seats": "",
+    "notes": ""
+   }
+  ]
+ }
+}
