@@ -1,0 +1,15 @@
+{
+  "name": "xkelamkabut",
+  "short_name": "xkelamkabut",
+  "description": "Rough itineraries, tak kelam-kabut.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fbf7f0",
+  "theme_color": "#2a8c95",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

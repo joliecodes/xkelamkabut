@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2a8c95">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="xkelamkabut">
+<title>xkelamkabut</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="kicker">xkelamkabut</div>
+  <h1 id="tripTitle" contenteditable="true" spellcheck="false"></h1>
+  <p id="tripDates"></p>
+  <svg class="wave" viewBox="0 0 100 20" preserveAspectRatio="none"><path d="M0,12 C20,2 35,20 55,10 C72,2 85,14 100,8 L100,20 L0,20 Z"/></svg>
+</header>
+
+<main>
+  <section class="view on" id="v-itinerary">
+    <div class="days" id="days"></div>
+    <div class="dayhead" id="dayhead"></div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section class="view" id="v-bookings">
+    <div class="empty">
+      <div class="big">✈️ 🏨</div>
+      <p><b>Bookings</b> is coming in step 2.</p>
+      <p class="muted">Flights and hotels, with PDF upload.</p>
+    </div>
+  </section>
+</main>
+
+<nav class="tabs">
+  <a href="#itinerary" data-v="itinerary" class="on"><span class="i">🗓️</span>Itinerary</a>
+  <a href="#bookings" data-v="bookings"><span class="i">✈️</span>Bookings</a>
+</nav>
+
+<!-- Drawer -->
+<div class="backdrop" id="backdrop"></div>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true">
+  <div class="grab"></div>
+  <h3 id="drawerTitle">Add to itinerary</h3>
+  <div class="types" id="types"></div>
+  <form id="itemForm" autocomplete="off">
+    <label>Title<input name="title" placeholder="e.g. Beach" required></label>
+    <div class="two">
+      <label>Start<input name="start" type="time" required></label>
+      <label>End <span class="muted">(optional)</span><input name="end" type="time"></label>
+    </div>
+    <label>Google Maps link <span class="muted">(optional)</span><input name="maps" type="url" inputmode="url" placeholder="Paste a maps.app.goo.gl link"></label>
+    <label>Notes <span class="muted">(optional)</span><textarea name="notes" rows="3" placeholder="Booking ref, what to order, reminders…"></textarea></label>
+    <div class="actions">
+      <button type="button" class="btn ghost danger" id="delItem">Delete</button>
+      <button type="button" class="btn ghost" id="cancel">Cancel</button>
+      <button type="submit" class="btn">Save</button>
+    </div>
+  </form>
+</div>
+
+<!-- Day menu -->
+<div class="drawer small" id="dayMenu" role="dialog" aria-modal="true">
+  <div class="grab"></div>
+  <h3>Day options</h3>
+  <form id="dayForm">
+    <label>Label<input name="label" placeholder="e.g. Arrive"></label>
+    <label>Date<input name="date" type="date"></label>
+    <div class="actions">
+      <button type="button" class="btn ghost danger" id="delDay">Delete day</button>
+      <button type="button" class="btn ghost" id="cancelDay">Cancel</button>
+      <button type="submit" class="btn">Save</button>
+    </div>
+  </form>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>

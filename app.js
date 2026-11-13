@@ -1,0 +1,275 @@
+/* xkelamkabut — step 1: itinerary */
+(() => {
+  const KEY = 'xkk-trip-v1';
+  const TYPES = {
+    activity:  { label: 'Activity',  icon: '🏖️', c: '#2a8c95', bg: '#eaf5f5' },
+    meal:      { label: 'Meal',      icon: '🍜', c: '#e07a5f', bg: '#fcefea' },
+    rest:      { label: 'Rest',      icon: '🛏️', c: '#9a6fb0', bg: '#f3edf7' },
+    transport: { label: 'Transport', icon: '🚕', c: '#5b7fa6', bg: '#ecf1f7' },
+    other:     { label: 'Other',     icon: '📌', c: '#d9a441', bg: '#fbf4e4' },
+  };
+  const FIRST_HOUR = 6, LAST_HOUR = 23;
+
+  const $ = s => document.querySelector(s);
+  const uid = () => Math.random().toString(36).slice(2, 9);
+
+  /* ---------- storage ---------- */
+  const store = {
+    load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } },
+    save(v) { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} },
+  };
+
+  const it = (type, start, title, extra = {}) => ({ id: uid(), type, start, end: '', title, maps: '', notes: '', ...extra });
+  const SAMPLE = {
+    title: 'Phu Quoc',
+    days: [
+      { id: uid(), date: '2026-11-30', label: 'Arrive', items: [
+        it('transport', '13:35', 'Land in Phu Quoc', { notes: 'AK 545' }),
+        it('transport', '14:15', 'Grab to hotel'),
+        it('rest', '15:00', 'Check in', { maps: 'https://www.google.com/maps/search/?api=1&query=Sunday+Boutique+Hotel+Khem+Beach+Phu+Quoc' }),
+        it('meal', '15:30', 'Snack'),
+        it('activity', '16:00', 'Beach till sunset'),
+        it('meal', '18:30', 'Dinner'),
+      ]},
+      { id: uid(), date: '2026-12-01', label: 'Beach + Sunset Town', items: [
+        it('meal', '08:00', 'Breakfast'),
+        it('activity', '09:00', 'Beach'),
+        it('meal', '12:00', 'Lunch'),
+        it('rest', '13:30', 'Hotel'),
+        it('transport', '16:00', 'Grab to Sunset Town'),
+        it('activity', '16:30', 'Explore Sunset Town'),
+        it('meal', '17:30', 'Dinner'),
+        it('activity', '18:30', 'Vui Fest night market', { notes: 'Open 4 pm – midnight' }),
+      ]},
+      { id: uid(), date: '2026-12-02', label: 'Free & easy', items: [
+        it('meal', '08:00', 'Breakfast'),
+        it('other', '09:00', 'Free & easy'),
+        it('meal', '12:00', 'Lunch'),
+        it('other', '13:30', 'Shopping + Treats'),
+        it('rest', '14:30', 'Hotel'),
+        it('activity', '15:30', 'Beach till sunset'),
+        it('rest', '18:00', 'Hotel'),
+        it('meal', '19:00', 'Dinner'),
+      ]},
+      { id: uid(), date: '2026-12-03', label: 'Fly home', items: [
+        it('meal', '08:00', 'Breakfast'),
+        it('rest', '10:00', 'Pack up'),
+        it('rest', '11:00', 'Check out'),
+        it('transport', '11:30', 'Grab to airport'),
+        it('meal', '12:30', 'Lunch'),
+        it('transport', '14:10', 'Departure', { notes: 'AK 546' }),
+      ]},
+    ],
+  };
+
+  let trip = store.load() || structuredClone(SAMPLE);
+  let cur = 0;
+  const save = () => store.save(trip);
+
+  /* ---------- helpers ---------- */
+  const fmtDate = (iso, opts) => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', opts) : '';
+  const fmtTime = hm => {
+    if (!hm) return '';
+    let [h, m] = hm.split(':').map(Number);
+    const ap = h < 12 ? 'am' : 'pm'; h = h % 12 || 12;
+    return `${h}:${String(m).padStart(2, '0')} ${ap}`;
+  };
+  const fmtHour = h => `${h % 12 || 12} ${h < 12 || h === 24 ? 'am' : 'pm'}`;
+  const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const todayISO = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const toast = msg => { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 1500); };
+
+  /* ---------- header ---------- */
+  function renderHeader() {
+    $('#tripTitle').textContent = trip.title || 'My trip';
+    const ds = trip.days.map(d => d.date).filter(Boolean).sort();
+    $('#tripDates').textContent = ds.length
+      ? `${fmtDate(ds[0], { day: 'numeric', month: 'short' })} – ${fmtDate(ds.at(-1), { day: 'numeric', month: 'short', year: 'numeric' })} · ${trip.days.length} day${trip.days.length > 1 ? 's' : ''}`
+      : 'Tap + Add Day to start';
+    document.title = `${trip.title} · xkelamkabut`;
+  }
+  $('#tripTitle').addEventListener('blur', e => { trip.title = e.target.textContent.trim() || 'My trip'; save(); renderHeader(); });
+  $('#tripTitle').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
+
+  /* ---------- day tabs ---------- */
+  function renderDays() {
+    const wrap = $('#days'); wrap.innerHTML = '';
+    trip.days.forEach((d, i) => {
+      const b = document.createElement('button');
+      b.className = i === cur ? 'on' : '';
+      b.innerHTML = `<b>Day ${i + 1}</b><span>${d.date ? fmtDate(d.date, { weekday: 'short', day: 'numeric' }) : '—'}</span>`;
+      b.onclick = () => { cur = i; render(); };
+      wrap.appendChild(b);
+    });
+    const add = document.createElement('button');
+    add.className = 'add'; add.textContent = '+ Add Day';
+    add.onclick = addDay;
+    wrap.appendChild(add);
+    wrap.querySelector('.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }
+
+  function addDay() {
+    const last = trip.days.at(-1);
+    trip.days.push({ id: uid(), date: last?.date ? addDays(last.date, 1) : todayISO(), label: '', items: [] });
+    cur = trip.days.length - 1; save(); render();
+    toast(`Day ${cur + 1} added`);
+  }
+
+  /* ---------- hour grid ---------- */
+  function renderGrid() {
+    const head = $('#dayhead'), grid = $('#grid');
+    const day = trip.days[cur];
+    if (!day) {
+      head.innerHTML = '';
+      grid.innerHTML = `<div class="empty"><div class="big">🗓️</div><p><b>No days yet</b></p><p class="muted">Tap + Add Day to begin.</p></div>`;
+      return;
+    }
+    head.innerHTML = `<div><h2>${day.date ? fmtDate(day.date, { weekday: 'long', day: 'numeric', month: 'short' }) : `Day ${cur + 1}`}</h2>
+      <div class="sub">Day ${cur + 1}${day.label ? ' · ' + esc(day.label) : ''}</div></div>
+      <button aria-label="Day options" id="dayOpts">⋯</button>`;
+    $('#dayOpts').onclick = openDayMenu;
+
+    const items = [...day.items].sort((a, b) => a.start.localeCompare(b.start));
+    const hours = items.map(x => +x.start.slice(0, 2));
+    const from = Math.min(FIRST_HOUR, ...hours), to = Math.max(LAST_HOUR, ...hours);
+    const isToday = day.date === todayISO(), nowH = new Date().getHours();
+
+    grid.innerHTML = '';
+    for (let h = from; h <= to; h++) {
+      const row = document.createElement('div');
+      row.className = 'hour' + (isToday && h === nowH ? ' now' : '');
+      row.innerHTML = `<div class="h">${fmtHour(h)}</div><div class="slot"></div>`;
+      const slot = row.querySelector('.slot');
+      items.filter(x => +x.start.slice(0, 2) === h).forEach(x => slot.appendChild(itemEl(x)));
+      slot.addEventListener('click', e => { if (e.target === slot) openDrawer(null, `${String(h).padStart(2, '0')}:00`); });
+      grid.appendChild(row);
+    }
+  }
+
+  function itemEl(x) {
+    const T = TYPES[x.type] || TYPES.other;
+    const el = document.createElement('div');
+    el.className = 'item';
+    el.style.setProperty('--c', T.c); el.style.setProperty('--bg', T.bg);
+    el.innerHTML = `<div class="ic">${T.icon}</div>
+      <div class="body"><div class="t">${esc(x.title)}</div>
+      <div class="m">${fmtTime(x.start)}${x.end ? ' – ' + fmtTime(x.end) : ''}</div>
+      ${x.notes ? `<div class="n">${esc(x.notes)}</div>` : ''}</div>
+      ${x.maps ? `<a class="map" href="${esc(x.maps)}" target="_blank" rel="noopener">Map ↗</a>` : ''}`;
+    el.addEventListener('click', e => { if (!e.target.closest('.map')) openDrawer(x); });
+    return el;
+  }
+
+  /* ---------- item drawer ---------- */
+  const form = $('#itemForm');
+  let editing = null, pickedType = 'activity';
+
+  function renderTypes() {
+    const wrap = $('#types'); wrap.innerHTML = '';
+    Object.entries(TYPES).forEach(([k, T]) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = k === pickedType ? 'on' : '';
+      b.style.setProperty('--c', T.c); b.style.setProperty('--bg', T.bg);
+      b.innerHTML = `<span>${T.icon}</span>${T.label}`;
+      b.onclick = () => { pickedType = k; renderTypes(); form.title.placeholder = PLACEHOLDER[k]; };
+      wrap.appendChild(b);
+    });
+  }
+  const PLACEHOLDER = { activity: 'e.g. Beach', meal: 'e.g. Lunch', rest: 'e.g. Hotel', transport: 'e.g. Grab to airport', other: 'e.g. Shopping' };
+
+  function openDrawer(item, startTime) {
+    editing = item;
+    pickedType = item?.type || 'activity';
+    $('#drawerTitle').textContent = item ? 'Edit item' : `Add at ${fmtTime(startTime)}`;
+    form.title.value = item?.title || '';
+    form.start.value = item?.start || startTime;
+    form.end.value = item?.end || '';
+    form.maps.value = item?.maps || '';
+    form.notes.value = item?.notes || '';
+    form.title.placeholder = PLACEHOLDER[pickedType];
+    $('#delItem').hidden = !item; $('#delItem').textContent = 'Delete'; $('#delItem').dataset.armed = '';
+    renderTypes();
+    show('#drawer');
+    if (!item) setTimeout(() => form.title.focus(), 260);
+  }
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const day = trip.days[cur];
+    const data = {
+      type: pickedType,
+      title: form.title.value.trim(),
+      start: form.start.value,
+      end: form.end.value,
+      maps: normaliseUrl(form.maps.value.trim()),
+      notes: form.notes.value.trim(),
+    };
+    if (!data.title || !data.start) return;
+    if (editing) Object.assign(editing, data);
+    else day.items.push({ id: uid(), ...data });
+    save(); hide(); renderGrid();
+    toast(editing ? 'Saved' : 'Added');
+  });
+
+  $('#delItem').onclick = e => {
+    const b = e.currentTarget;
+    if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Tap to confirm'; return; }
+    const day = trip.days[cur];
+    day.items = day.items.filter(x => x !== editing);
+    save(); hide(); renderGrid(); toast('Deleted');
+  };
+  $('#cancel').onclick = hide;
+
+  const normaliseUrl = u => !u ? '' : /^https?:\/\//i.test(u) ? u : 'https://' + u;
+
+  /* ---------- day menu ---------- */
+  const dayForm = $('#dayForm');
+  function openDayMenu() {
+    const d = trip.days[cur];
+    dayForm.label.value = d.label || '';
+    dayForm.date.value = d.date || '';
+    $('#delDay').textContent = 'Delete day'; $('#delDay').dataset.armed = '';
+    show('#dayMenu');
+  }
+  dayForm.addEventListener('submit', e => {
+    e.preventDefault();
+    const d = trip.days[cur];
+    d.label = dayForm.label.value.trim(); d.date = dayForm.date.value;
+    save(); hide(); render();
+  });
+  $('#delDay').onclick = e => {
+    const b = e.currentTarget;
+    if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Tap to confirm'; return; }
+    trip.days.splice(cur, 1); cur = Math.max(0, cur - 1);
+    save(); hide(); render(); toast('Day deleted');
+  };
+  $('#cancelDay').onclick = hide;
+
+  /* ---------- drawer show/hide ---------- */
+  let openEl = null;
+  function show(sel) { openEl = $(sel); openEl.classList.add('on'); $('#backdrop').classList.add('on'); }
+  function hide() { openEl?.classList.remove('on'); $('#backdrop').classList.remove('on'); openEl = null; }
+  $('#backdrop').onclick = hide;
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
+
+  /* ---------- routing ---------- */
+  const VIEWS = ['itinerary', 'bookings'];
+  function route() {
+    const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'itinerary';
+    VIEWS.forEach(x => document.getElementById('v-' + x).classList.toggle('on', x === v));
+    document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.v === v));
+  }
+  addEventListener('hashchange', route);
+
+  /* ---------- go ---------- */
+  function render() { renderHeader(); renderDays(); renderGrid(); }
+  const t = todayISO(), ti = trip.days.findIndex(d => d.date === t);
+  if (ti >= 0) cur = ti;
+  render(); route();
+
+  // service worker (network-first while we build)
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+})();
