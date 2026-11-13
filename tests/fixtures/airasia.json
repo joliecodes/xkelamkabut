@@ -1,0 +1,43 @@
+{
+ "text": "Booking date: 13 Nov 2026\nBooking Confirmed\nBooking no.\nTESTAA\nPlease make sure that you have all the required travel documents including passport and visa for your\nflight to: Vietnam . To learn more about your destination's entry requirements, visit https://air.asia/Vbzxc\nGuest details\nAlex Binti Lee (adult)   Jamie Lee (child)\nFlight summary\nKuala Lumpur   Phu Quoc\nDeparture: Mon, Nov 30 • Return: Thu, Dec 03\nDepart : AirAsia\n12:45   13:35   1h 50m   Non-stop\nKUL   PQC\nGMT+08   GMT+07\nReturn : AirAsia\n14:10   17:00   1h 50m   Non-stop\nPQC   KUL\nGMT+07   GMT+08\nDepart: Monday, 30 November 2026\n\n12:45   Kuala Lumpur\n30 Nov   Kuala Lumpur International Airport ,Terminal 2\nAirAsia , AK 545\n1h 50m\nEconomy\n13:35   Phu Quoc\n30 Nov   Phu Quoc International Airport\nReturn: Thursday, 3 December 2026\n14:10   Phu Quoc\n03 Dec   Phu Quoc International Airport\nAirAsia , AK 546\n1h 50m\nEconomy Promo\n17:00   Kuala Lumpur\n03 Dec   Kuala Lumpur International Airport ,Terminal 2\nAdd-ons\nKuala Lumpur to Phu Quoc\nAlex Binti Lee   Jamie Lee\nChecked baggage 20kg   Checked baggage 20kg\n7 kg Carry-on baggage   7 kg Carry-on baggage\nSeat 27E   Seat 27F\n1x Zero Change Fee   1x Zero Change Fee\nPhu Quoc to Kuala Lumpur\nAlex Binti Lee   Jamie Lee\nChecked baggage 20kg   Checked baggage 20kg\n7 kg Carry-on baggage   7 kg Carry-on baggage\nSeat 19E   Seat 19F\n1x Zero Change Fee   1x Zero Change Fee\n\nView terms and conditions for refunds and cancellations at https://air.asia/KZsmP\nDownload the best travel and lifestyle app here\nGo further. Be more adventurous. A world of opportunities awaits within the airasia\nmobile app!\n\n",
+ "cols": "Booking Confirmed\nBooking no.\nTESTAA\nPlease make sure that you have all the required travel documents including passport and visa for your\nflight to: Vietnam . To learn more about your destination's entry requirements, visit https://air.asia/Vbzxc\nGuest details\nAlex Binti Lee (adult)   Jamie Lee (child)\nFlight summary\nKuala Lumpur   Phu Quoc\nDeparture: Mon, Nov 30 • Return: Thu, Dec 03\nDepart : AirAsia\n12:45   13:35\nKUL   PQC\nGMT+08   GMT+07\nReturn : AirAsia\n14:10   17:00\nPQC   KUL\nGMT+07   GMT+08\nDepart: Monday, 30 November 2026\n\nBooking date: 13 Nov 2026\n1h 50m   Non-stop\n1h 50m   Non-stop\n\n12:45   Kuala Lumpur\n30 Nov   Kuala Lumpur International Airport ,Terminal 2\nAirAsia , AK 545\n1h 50m\nEconomy\n13:35   Phu Quoc\n30 Nov   Phu Quoc International Airport\nReturn: Thursday, 3 December 2026\n14:10   Phu Quoc\n03 Dec   Phu Quoc International Airport\nAirAsia , AK 546\n1h 50m\nEconomy Promo\n17:00   Kuala Lumpur\n03 Dec   Kuala Lumpur International Airport ,Terminal 2\nAdd-ons\nKuala Lumpur to Phu Quoc\nAlex Binti Lee\nChecked baggage 20kg\n7 kg Carry-on baggage\nSeat 27E\n1x Zero Change Fee\nPhu Quoc to Kuala Lumpur\nAlex Binti Lee\nChecked baggage 20kg\n7 kg Carry-on baggage\nSeat 19E\n1x Zero Change Fee\n\nJamie Lee\nChecked baggage 20kg\n7 kg Carry-on baggage\nSeat 27F\n1x Zero Change Fee\nJamie Lee\nChecked baggage 20kg\n7 kg Carry-on baggage\nSeat 19F\n1x Zero Change Fee\n\nView terms and conditions for refunds and cancellations at https://air.asia/KZsmP\nDownload the best travel and lifestyle app here\nGo further. Be more adventurous. A world of opportunities awaits within the airasia\nmobile app!\n\n\n",
+ "expected": {
+  "kind": "flight",
+  "flights": [
+   {
+    "airline": "AirAsia",
+    "flightNo": "AK 545",
+    "ref": "TESTAA",
+    "from": "KUL",
+    "to": "PQC",
+    "fromCity": "Kuala Lumpur",
+    "toCity": "Phu Quoc",
+    "depDate": "2026-11-30",
+    "depTime": "12:45",
+    "arrDate": "2026-11-30",
+    "arrTime": "13:35",
+    "duration": "1h 50m",
+    "seats": "27E, 27F",
+    "baggage": "20kg checked + 7kg carry-on",
+    "notes": "Terminal 2"
+   },
+   {
+    "airline": "AirAsia",
+    "flightNo": "AK 546",
+    "ref": "TESTAA",
+    "from": "PQC",
+    "to": "KUL",
+    "fromCity": "Phu Quoc",
+    "toCity": "Kuala Lumpur",
+    "depDate": "2026-12-03",
+    "depTime": "14:10",
+    "arrDate": "2026-12-03",
+    "arrTime": "17:00",
+    "duration": "1h 50m",
+    "seats": "19E, 19F",
+    "baggage": "20kg checked + 7kg carry-on",
+    "notes": "Terminal 2"
+   }
+  ]
+ }
+}

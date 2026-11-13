@@ -18,3 +18,6 @@ A no-build PWA hosted on GitHub Pages. Trips are saved in the browser (localStor
 2. ✅ Trips home (multiple trips) and Packing lists
 3. ✅ Bookings: flight, stay and other cards; PDF upload read on-device (pdf.js) with a review form; optional sync to the itinerary
 4. Export/import, full offline caching
+
+## PDF reader tests
+`tests/fixtures/` holds the text of real booking PDFs (AirAsia, Agoda, Emirates, Qatar Airways, a direct hotel booking) with personal details replaced by fakes. Run `node tests/run.js` to check the reader still gets every field right; GitHub runs it on every push. Never commit the original PDFs.

@@ -1,0 +1,19 @@
+{
+ "text": "02/10/2026, 10:48   Your booking #Z9TST9 is con fi rmed!\nHôtel Mistral   US • MYR\n✓\nYour booking #Z9TST9 is confirmed!\nA confirmation email has been sent to traveller@example.com.\nMake another booking\nBack to the hotel website\n Jan 28 , 2027 (from 14:00) → Jan 30 , 2027 (to 12:00)\n 2 adults  1\nBooking details\nBooking #Z9TST9, made by Alex Lee on 02 Oct 2026\nBreakfast not included • Internet included\nRooms\nhttps://www.secure-hotel-booking.com/d-edge/Hotel-Mistral/24LJ/Con fi rmation?con fi rmationId=00000000-0000-0000-0000-000000000000&ref=Z9TST9&preset…   1/3\n\n02/10/2026, 10:48   Your booking #Z9TST9 is con fi rmed!\nComfort Room   € 390\n 2 adults\nPREMS\nDiscount\nDiscount   -€ 78\nSubtotal   € 312\nIncluding € 28.36 of taxes and fees\nExcluded taxes   € 22.12\nTotal price   € 334.12\nAmount already paid   € 312\nRemaining balance   € 22.12\nCancellation policy\nTo modify or cancel your booking, you will need the PIN code from your confirmation email.\nhttps://www.secure-hotel-booking.com/d-edge/Hotel-Mistral/24LJ/Con fi rmation?con fi rmationId=00000000-0000-0000-0000-000000000000&ref=Z9TST9&preset…   2/3\n\n02/10/2026, 10:48   Your booking #Z9TST9 is con fi rmed!\nModify or cancel your booking \nHôtel Mistral\n 24 rue Cels, 75014 Paris, France\n 0143202543\n✉ contact@mistralhotel.fr\n www.hotel-mistral-paris.com/\nHôtel Mistral\n24 rue Cels, 75014 Paris, France\nMore information\nContact us\n0143202543\ncontact@mistralhotel.fr\nwww.hotel-mistral-paris.com/\nPayment methods\n© 2026 Hôtel Mistral\nModify or cancel a booking\nPrivacy Policy\nhttps://www.secure-hotel-booking.com/d-edge/Hotel-Mistral/24LJ/Con fi rmation?con fi rmationId=00000000-0000-0000-0000-000000000000&ref=Z9TST9&preset…   3/3\n\n",
+ "cols": "02/10/2026, 10:48   Your booking #Z9TST9 is con\nHôtel Mistral\n✓\nYour booking #Z9TST9 is confirmed!\nA confirmation email has been sent to traveller@example.com.\nMake another booking\nBack to the hotel website\n Jan 28 , 2027 (from 14:00)\n 2 adults\nBooking details\nBooking #Z9TST9, made by Alex Lee on 02 Oct 2026\nBreakfast not included • Internet included\nRooms\nhttps://www.secure-hotel-booking.com/d-edge/Hotel-Mistral/24LJ/Con fi rmation?con fi\n\nfi rmed!\nUS • MYR\n→ Jan 30 , 2027 (to 12:00)\n 1\nrmationId=00000000-0000-0000-0000-000000000000&ref=Z9TST9&preset…   1/3\n\n02/10/2026, 10:48   Your booking #Z9TST9 is con\nComfort Room\n 2 adults\nPREMS\nDiscount\nDiscount\nSubtotal\nIncluding € 28.36 of taxes and fees\nExcluded taxes\nTotal price\nAmount already paid\nRemaining balance\nCancellation policy\nTo modify or cancel your booking, you will need the PIN code from your confirmation email.\nhttps://www.secure-hotel-booking.com/d-edge/Hotel-Mistral/24LJ/Con fi rmation?con fi\n\nfi rmed!\n€ 390\n-€ 78\n€ 312\n€ 22.12\n€ 334.12\n€ 312\n€ 22.12\nrmationId=00000000-0000-0000-0000-000000000000&ref=Z9TST9&preset…   2/3\n\n02/10/2026, 10:48   Your booking #Z9TST9 is con\nModify or cancel your booking\nHôtel Mistral\n 24 rue Cels, 75014 Paris, France\n 0143202543\n✉ contact@mistralhotel.fr\n www.hotel-mistral-paris.com/\nHôtel Mistral\n24 rue Cels, 75014 Paris, France\nMore information\nContact us\n0143202543\ncontact@mistralhotel.fr\nwww.hotel-mistral-paris.com/\nPayment methods\n© 2026 Hôtel Mistral\nModify or cancel a booking\nPrivacy Policy\nhttps://www.secure-hotel-booking.com/d-edge/Hotel-Mistral/24LJ/Con fi rmation?con fi\n\nfi rmed!\n\nrmationId=00000000-0000-0000-0000-000000000000&ref=Z9TST9&preset…   3/3\n\n",
+ "expected": {
+  "kind": "stay",
+  "stay": {
+   "name": "Hôtel Mistral",
+   "address": "24 rue Cels, 75014 Paris, France",
+   "phone": "0143202543",
+   "ref": "Z9TST9",
+   "inDate": "2027-01-28",
+   "inTime": "14:00",
+   "outDate": "2027-01-30",
+   "outTime": "12:00",
+   "room": "Comfort Room",
+   "notes": "Breakfast not included · Internet included · €22.12 left to pay at the hotel"
+  }
+ }
+}

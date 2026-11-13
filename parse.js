@@ -16,12 +16,12 @@
     if ((m = s.match(/(\d{4})-(\d{2})-(\d{2})/))) return iso(+m[1], +m[2], +m[3]);
     if ((m = s.match(new RegExp(`(\\d{1,2})(?:st|nd|rd|th)?\\s*${MON}\\.?,?\\s*(\\d{4})?`, 'i'))))
       return iso(+(m[3] || fallbackYear), MONTHS[m[2].slice(0, 3).toLowerCase()], +m[1]);
-    if ((m = s.match(new RegExp(`${MON}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s*(\\d{4})?`, 'i'))))
+    if ((m = s.match(new RegExp(`${MON}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\s*,?\\s*(\\d{4})?`, 'i'))))
       return iso(+(m[3] || fallbackYear), MONTHS[m[1].slice(0, 3).toLowerCase()], +m[2]);
     if ((m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/))) return iso(+m[3], +m[2], +m[1]);
     return '';
   }
-  const DATE_RE = new RegExp(`(\\d{4}-\\d{2}-\\d{2}|\\d{1,2}(?:st|nd|rd|th)?\\s*${MON}\\.?,?(?:\\s*\\d{4})?|${MON}\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?,?(?:\\s*\\d{4})?|\\d{1,2}/\\d{1,2}/\\d{4})`, 'i');
+  const DATE_RE = new RegExp(`(\\d{4}-\\d{2}-\\d{2}|\\d{1,2}(?:st|nd|rd|th)?\\s*${MON}\\.?,?(?:\\s*\\d{4})?|${MON}\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?\\s*,?(?:\\s*\\d{4})?|\\d{1,2}/\\d{1,2}/\\d{4})`, 'i');
   const yearIn = t => +((t.match(/\b(20\d{2})\b/) || [])[1] || new Date().getFullYear());
   const time24 = s => { const m = (s || '').match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i); if (!m) return ''; let h = +m[1]; if (m[3]) { const pm = /pm/i.test(m[3]); if (h === 12) h = pm ? 12 : 0; else if (pm) h += 12; } return `${pad(h)}:${m[2]}`; };
 
@@ -187,28 +187,57 @@
     }
     return out.join('\n');
   }
+  // A street address line: "24 rue Cels, 75014 Paris, France" / "D2-38-40, Diamond 2 Street, ..."
+  const ADDRESS_LINE = /^\s*[A-Z]?\d[\w\/-]*,?\s+[^\n]*,\s*[^\n]*\b\d{4,6}\b/i;
+  const NOT_NAME = /website|booking|email|e-mail|policy|back to|confirm|cancel|modify|payment|privacy|information|contact us|discount|total|price|guest|\bhttps?:/i;
   function parseStay(text, cols) {
     const src = cols || text, year = yearIn(text);
-    // name: prefer a Latin name in brackets ("Khách sạn X (X Hotel)")
+    const lines = text.split('\n').map(l => l.trim());
+    // name: labelled ("Property :"), else the line just above the street address
     let block = after(src, /^\s*(property|hotel(?: name)?|accommodation)\s*:/i, /^(address|check|arrival|phone|tel|contact|property contact)/i, 4);
     block = block.split('\n').map(l => l.replace(/^(hotel|property)\s*:\s*/i, '')).join(' ');
     const br = block.match(/\(([^()]*[A-Za-z][^()]*)\)/);
     let name = clean(br ? br[1] : block.split(/\s{3,}|\n/)[0]);
-    if (!name) name = clean((src.match(/^(.*\b(?:hotel|resort|inn|hostel|villa|suites?|boutique)\b.*)$/im) || [])[1]);
+    const addrIdx = lines.findIndex(l => ADDRESS_LINE.test(l.replace(/^[^\w]+/, '')) && !/^\s*address\s*:/i.test(l));
+    if (!name && addrIdx > 0) {
+      for (let j = addrIdx - 1; j >= Math.max(0, addrIdx - 3); j--) { const l = clean(lines[j].replace(/^[^\p{L}\d]+/u, '')); if (l && !NOT_NAME.test(l) && l.length < 60) { name = l; break; } }
+    }
+    if (!name) name = clean((lines.find(l => /\b(h[oô]tel|resort|inn|hostel|villa|suites?|boutique|lodge|guesthouse)\b/i.test(l) && !NOT_NAME.test(l)) || ''));
 
     let address = clean(after(src, /^\s*address\s*:/i, /^(property|hotel|phone|tel|contact|check|arrival|number of|room|booking)\b/i, 5).replace(/\n/g, ' '));
     const pc = address.match(/^(.*?\b\d{5,6}\b)/); if (pc) address = pc[1];       // stop after the postcode
-    const phone = clean((src.match(/(?:contact\s*number|phone|tel(?:ephone)?)\s*:?\s*(\+?\d[\d\s()-]{6,}\d)/i) || [])[1]);
-    const ref = (text.match(/\b(?:booking\s*id|confirmation\s*(?:no|number|code)|reservation\s*(?:no|number|code)|booking\s*(?:no|number|reference))\.?\s*[:#]?\s*([A-Z0-9-]{5,})/i) || [])[1] || bookingRef(text);
+    if (!address && addrIdx >= 0) address = clean(lines[addrIdx].replace(/^[^\w]+/, ''));
+    let phone = clean((src.match(/(?:contact\s*number|phone|tel(?:ephone)?)\s*:?\s*(\+?\d[\d\s()-]{6,}\d)/i) || [])[1]);
+    if (!phone && addrIdx >= 0) phone = clean((lines.slice(addrIdx + 1, addrIdx + 4).find(l => /^[^\w+]*\+?\d[\d\s().-]{7,}\d$/.test(l)) || '').replace(/^[^\d+]+/, ''));
+    const ref = (text.match(/\b(?:booking\s*id|confirmation\s*(?:no|number|code)|reservation\s*(?:no|number|code)|booking\s*(?:no|number|reference))\.?\s*[:#]?\s*([A-Z0-9-]{5,})/i) || [])[1]
+      || (text.match(/\b(?:booking|reservation|confirmation)\s*#\s*([A-Z0-9]{5,12})\b/i) || [])[1] || bookingRef(text);
     const grab = re => { const m = text.match(re); return m ? parseDate(m[1], year) : ''; };
-    const inDate = grab(new RegExp(`(?:arrival|check[- ]?in)(?:\\s*date)?\\s*:?\\s*(?:[A-Za-z]{3,9},?\\s*)?${DATE_RE.source}`, 'i'));
-    const outDate = grab(new RegExp(`(?:departure|check[- ]?out)(?:\\s*date)?\\s*:?\\s*(?:[A-Za-z]{3,9},?\\s*)?${DATE_RE.source}`, 'i'));
-    const inTime = time24((text.match(/check[- ]?in[^\n]{0,30}?(\d{1,2}:\d{2}\s*(?:am|pm)?)/i) || [])[1]);
-    const outTime = time24((text.match(/check[- ]?out[^\n]{0,30}?(\d{1,2}:\d{2}\s*(?:am|pm)?)/i) || [])[1]);
+    let inDate = grab(new RegExp(`(?:arrival|check[- ]?in)(?:\\s*date)?\\s*:?\\s*(?:[A-Za-z]{3,9},?\\s*)?${DATE_RE.source}`, 'i'));
+    let outDate = grab(new RegExp(`(?:departure|check[- ]?out)(?:\\s*date)?\\s*:?\\s*(?:[A-Za-z]{3,9},?\\s*)?${DATE_RE.source}`, 'i'));
+    let inTime = time24((text.match(/check[- ]?in[^\n]{0,30}?(\d{1,2}:\d{2}\s*(?:am|pm)?)/i) || [])[1]);
+    let outTime = time24((text.match(/check[- ]?out[^\n]{0,30}?(\d{1,2}:\d{2}\s*(?:am|pm)?)/i) || [])[1]);
+    // "Jan 28, 2027 (from 14:00) → Jan 30, 2027 (to 12:00)"
+    const range = text.match(new RegExp(`${DATE_RE.source}\\s*(?:\\((?:from|after)\\s*(\\d{1,2}:\\d{2})\\))?\\s*(?:→|->|–|—|until)\\s*${DATE_RE.source}\\s*(?:\\((?:to|until|before|by)\\s*(\\d{1,2}:\\d{2})\\))?`, 'i'));
+    if (range) {
+      const g = range.slice(1).filter(v => v !== undefined);
+      const ds = [...range[0].matchAll(new RegExp(DATE_RE.source, 'gi'))].map(m => parseDate(m[1], year));
+      inDate ||= ds[0] || ''; outDate ||= ds[1] || '';
+      const ft = range[0].match(/\((?:from|after)\s*(\d{1,2}:\d{2})\)/i), tt = range[0].match(/\((?:to|until|before|by)\s*(\d{1,2}:\d{2})\)/i);
+      inTime ||= ft ? time24(ft[1]) : ''; outTime ||= tt ? time24(tt[1]) : '';
+    }
     let room = after(src, /^\s*room\s*type\s*:/i, LABEL, 2).split('\n');
     room = clean(room.length > 1 && room[1].length < 25 ? room.join(' ') : room[0]);
+    if (!room) {
+      const ri = lines.findIndex(l => /^rooms?$/i.test(l));
+      const cand = lines.slice(ri >= 0 ? ri : 0).find(l => /\b(room|suite|studio|apartment|villa|bungalow|chalet|dorm|cabin)\b/i.test(l) && !/^rooms?$/i.test(l) && !NOT_NAME.test(l) && !/number of/i.test(l));
+      room = clean((cand || '').replace(/\s{3,}.*$/, '').replace(/[€$£¥]\s*[\d.,]+.*$/, ''));
+    }
     const included = clean((text.match(/benefits\s*included\s*:?\s*(.+)/i) || [])[1]);
-    return { name, address, phone, ref, inDate, inTime, outDate, outTime, room, notes: included ? `Included: ${included}` : '' };
+    const perks = clean((lines.find(l => /breakfast|internet|wi-?fi/i.test(l) && /included|not included/i.test(l) && l.length < 90) || '').replace(/\s*[•|]\s*/g, ' · '));
+    const bal = text.match(/(?:remaining\s*balance|balance\s*due|(?:to\s*)?pay\s*at\s*(?:the\s*)?(?:hotel|property))\s*:?\s*([€$£¥]|[A-Z]{3})?\s*([\d.,]+)\s*([€$£¥]|[A-Z]{3})?/i);
+    const balance = bal && +bal[2].replace(/,/g, '') > 0 ? `${(bal[1] || bal[3] || '').trim()}${bal[2]} left to pay at the hotel` : '';
+    const notes = [included ? `Included: ${included}` : perks, balance].filter(Boolean).join(' · ');
+    return { name, address, phone, ref, inDate, inTime, outDate, outTime, room, notes };
   }
 
   function parseBooking({ text, cols }) {
