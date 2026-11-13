@@ -197,3 +197,29 @@ form input.invalid{border-color:#d9534f;box-shadow:0 0 0 3px rgba(217,83,79,.15)
 .dayhead .round .ico{width:16px;height:16px}
 .days button em{display:block;font-style:normal;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;opacity:.75;margin-top:1px}
 .dayhead .round{margin-top:3px}
+
+/* options */
+.subtle{color:var(--muted)!important;font-weight:500!important}
+.optlist{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.optlist:empty{display:none}
+.optrow{display:flex;gap:10px;align-items:center;background:#faf8f4;border-radius:12px;padding:9px 10px 9px 12px;font-size:14px}
+.optrow .ico{width:16px;height:16px;color:var(--sea);flex:none}
+.optrow span{flex:1;min-width:0}
+.optrow b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.optrow small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.optrow button{border:0;background:#fff;border-radius:50%;width:28px;height:28px;display:grid;place-items:center;cursor:pointer;flex:none}
+.optrow button .ico{width:14px;height:14px;color:var(--ink)}
+.optlink{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.optlink input{display:block;width:100%;border:1.5px solid var(--line);border-radius:10px;padding:0 12px;height:48px;font-size:16px;outline:none;background:#fff}
+.optlink input:focus{border-color:var(--sea)}
+#optsBox .search{margin-top:2px}
+.vopts,.vother{border-top:1px solid var(--line);padding-top:12px;margin-top:2px}
+.vlabel{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;color:var(--muted);margin-bottom:10px}
+.pills{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.pills a,.pills button{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;height:44px;padding:0 14px;border-radius:99px;background:var(--bg);border:1.5px solid transparent;color:var(--ink);text-decoration:none;font-size:14px;font-weight:600;cursor:pointer}
+.pills a span,.pills button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pills a i,.pills button i{font-style:normal;color:var(--c);flex:none}
+.pills.deciding button{background:#fff;border-color:var(--c)}
+.vother summary{font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;margin-bottom:10px}
+.item .optpill{flex:none;display:inline-flex;align-items:center;height:24px;font-size:12px;line-height:1;font-weight:600;color:var(--c);background:#fff;border-radius:99px;padding:0 9px;white-space:nowrap}
+.vopts .btn{width:100%}

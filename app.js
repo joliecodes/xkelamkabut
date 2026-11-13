@@ -229,7 +229,7 @@
     el.innerHTML = `<div class="ic">${icon(typeKey)}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>
       <div class="m">${fmtTime(x.start)}${x.end ? ' – ' + fmtTime(x.end) : ''}</div></div>
-      <div class="flags">${x.notes ? `<span title="Has notes">${icon('note')}</span>` : ''}${primaryMapUrl(x) ? `<a class="map" href="${esc(primaryMapUrl(x))}" target="_blank" rel="noopener">Map ↗</a>` : ''}</div>`;
+      <div class="flags">${x.notes ? `<span title="Has notes">${icon('note')}</span>` : ''}${undecided(x) ? `<span class="optpill">${x.options.length} options</span>` : primaryMapUrl(x) ? `<a class="map" href="${esc(primaryMapUrl(x))}" target="_blank" rel="noopener">Map ↗</a>` : ''}</div>`;
     el.addEventListener('click', ev => { if (!ev.target.closest('.map')) openView(x); });
     return el;
   }
@@ -237,6 +237,7 @@
   /* ---------- view item ---------- */
   let viewing = null;
   function openView(x) {
+    if (viewing !== x) deciding = false;
     viewing = x;
     const k = TYPES[x.type] ? x.type : 'other', T = TYPES[k];
     const d = $('#viewDrawer');
@@ -247,12 +248,13 @@
     $('#vTime').textContent = fmtTime(x.start) + (x.end ? ' – ' + fmtTime(x.end) : '');
     $('#vNotesRow').hidden = !x.notes;
     $('#vNotes').textContent = x.notes || '';
-    const p = x.place;
+    const loc = effLoc(x), p = loc?.place;
     $('#vPlaceRow').hidden = !p;
     if (p) $('#vPlace').innerHTML = `<b>${esc(p.name)}</b>${p.address ? `<small>${esc(p.address)}</small>` : ''}`;
     const links = [];
-    if (x.maps) links.push(['Open link', x.maps, 'primary']);
+    if (loc?.maps) links.push(['Open in maps ↗', loc.maps, 'primary']);
     if (p) links.push(...openInLinks(p));
+    renderViewOptions(x);
     $('#vLinks').innerHTML = links.map(([label, href, cls]) =>
       `<a class="btn ${cls || 'ghost'}" href="${esc(href)}" target="_blank" rel="noopener">${label}</a>`).join('');
     $('#vLinks').hidden = !links.length;
@@ -260,11 +262,39 @@
   }
   $('#vEdit').onclick = () => openDrawer(viewing);
 
+  // Options in the view drawer: pills (tap = open maps), Decide, Other options
+  let deciding = false;
+  function renderViewOptions(x) {
+    const opts = x.options || [], picked = opts.find(o => o.id === x.decided);
+    $('#vOpts').hidden = !opts.length || !!picked;
+    $('#vOther').hidden = !picked || opts.length < 2;
+    if (!opts.length) return;
+    if (!picked) {
+      $('#vOptsLabel').textContent = deciding ? 'Tap the one you picked' : 'Options · tap to open in maps';
+      $('#vPills').classList.toggle('deciding', deciding);
+      $('#vPills').innerHTML = opts.map(o => deciding
+        ? `<button type="button" data-id="${o.id}"><span>${esc(o.name)}</span><i>✓</i></button>`
+        : `<a href="${esc(optionUrl(o))}" target="_blank" rel="noopener"><span>${esc(o.name)}</span><i>↗</i></a>`).join('');
+      $('#vPills').querySelectorAll('button').forEach(b => b.onclick = () => {
+        x.decided = b.dataset.id; deciding = false; save(); renderGrid(); openView(x); toast('Decided!');
+      });
+      $('#vDecide').textContent = deciding ? 'Cancel' : 'Decide';
+    } else {
+      const others = opts.filter(o => o !== picked);
+      $('#vOtherSum').textContent = `Other options (${others.length})`;
+      $('#vOtherPills').innerHTML = others.map(o => `<a href="${esc(optionUrl(o))}" target="_blank" rel="noopener"><span>${esc(o.name)}</span><i>↗</i></a>`).join('');
+      $('#vOther').open = false;
+    }
+  }
+  $('#vDecide').onclick = () => { deciding = !deciding; renderViewOptions(viewing); };
+  $('#vChange').onclick = () => { viewing.decided = null; deciding = true; save(); renderGrid(); openView(viewing); };
+
   /* ---------- item drawer ---------- */
   const form = $('#itemForm');
   let editing = null, pickedType = 'activity', pendingStart = '';
-  const PLACEHOLDER = { activity: 'e.g. Beach', meal: 'e.g. Lunch', rest: 'Rest', transport: 'e.g. Grab to airport', other: 'e.g. Shopping' };
-  const DEFAULT_TITLE = { rest: 'Rest' };   // used when the title is left empty
+  const PLACEHOLDER = { activity: 'e.g. Beach', meal: 'Meal', rest: 'Rest', transport: 'e.g. Grab to airport', other: 'e.g. Shopping' };
+  const DEFAULT_TITLE = { rest: 'Rest', meal: 'Meal' };
+  const OPT_TYPES = new Set(['meal', 'activity']);   // types that can list options   // used when the title is left empty
 
   // Step 1: card picker
   function renderCards() {
@@ -293,6 +323,7 @@
     $('#drawerTitle').textContent = `${editing ? 'Edit' : 'New'} ${T.label}`;
     form.title.placeholder = PLACEHOLDER[pickedType];
     suggestPlace();
+    setOptsMode(OPT_TYPES.has(pickedType) && draftOpts.length > 0);
     $('#step2').classList.add('on'); $('#step1').classList.remove('on');
     if (!editing && !form.title.value) setTimeout(() => form.title.focus(), 120);
   }
@@ -308,6 +339,8 @@
     form.maps.value = item?.maps || '';
     $('#linkField').hidden = !item?.maps; $('#showLink').hidden = !!item?.maps;
     setPlace(item?.place || null); $('#placeQ').value = ''; $('#placeResults').innerHTML = '';
+    draftOpts = structuredClone(item?.options || []); draftDecided = item?.decided || null;
+    $('#optQ').value = ''; $('#optResults').innerHTML = ''; $('#optLinkForm').hidden = true; $('#optLinkBtn').hidden = false;
     form.notes.value = item?.notes || '';
     $('#timeErr').hidden = true; ['title', 'start', 'end'].forEach(n => form[n].classList.remove('invalid', 'shake'));
     $('#delItem').hidden = !item; $('#delItem').textContent = 'Delete'; $('#delItem').dataset.armed = '';
@@ -325,8 +358,14 @@
       end: form.end.value,
       maps: normaliseUrl(form.maps.value.trim()),
       place: currentPlace,
+      options: [],
+      decided: null,
       notes: form.notes.value.trim(),
     };
+    if (OPT_TYPES.has(pickedType) && !$('#optsBox').hidden && draftOpts.length) {
+      data.options = draftOpts; data.place = null; data.maps = '';
+      data.decided = draftOpts.some(o => o.id === draftDecided) ? draftDecided : null;
+    }
     if (!data.title) { flagError(form.title); form.title.focus(); toast('Add a title'); return; }
     if (!data.start) { flagError(form.start); return; }
     const clash = findOverlap(day, data, editing);
@@ -414,8 +453,7 @@
     const all = trip.days.flatMap(d => d.items).map(i => i.place).filter(Boolean);
     return all.at(-1) || null;
   }
-  async function searchPlaces(q) {
-    const out = $('#placeResults');
+  async function searchPlaces(q, out = $('#placeResults'), onPick = p => { setPlace(p); $('#placeQ').value = ''; if (!form.title.value) form.title.value = p.name; }) {
     if (q.length < 3) { out.innerHTML = ''; return; }
     searchCtl?.abort(); searchCtl = new AbortController();
     const b = biasPoint();
@@ -436,7 +474,7 @@
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'pr';
         b.innerHTML = `${icon('pin')}<span><b>${esc(p.name)}</b><small>${esc(p.address)}</small></span>`;
-        b.onclick = () => { setPlace(p); out.innerHTML = ''; $('#placeQ').value = ''; if (!form.title.value) form.title.value = p.name; };
+        b.onclick = () => { out.innerHTML = ''; onPick(p); };
         out.appendChild(b);
       });
       if (list.length) out.insertAdjacentHTML('beforeend', '<div class="attr">Search by Photon · © OpenStreetMap contributors</div>');
@@ -444,12 +482,53 @@
       if (e.name !== 'AbortError') out.innerHTML = '<div class="pr muted">Search is unavailable right now. Paste a link below instead.</div>';
     }
   }
+  /* ---------- options editor (Meal + Activity) ---------- */
+  let draftOpts = [], draftDecided = null, optTimer;
+  function renderOptList() {
+    $('#optList').innerHTML = draftOpts.map(o => `<div class="optrow">${icon(o.place ? 'pin' : 'link')}<span><b>${esc(o.name)}</b><small>${esc(o.place?.address || o.maps || '')}</small></span>
+      <button type="button" data-id="${o.id}" aria-label="Remove option">${icon('x')}</button></div>`).join('');
+    $('#optList').querySelectorAll('button').forEach(b => b.onclick = () => { draftOpts = draftOpts.filter(o => o.id !== b.dataset.id); renderOptList(); });
+    $('#hideOpts').hidden = draftOpts.length > 0;
+  }
+  function setOptsMode(on) {
+    $('#singleLoc').hidden = on;
+    $('#optsBox').hidden = !on;
+    $('#showOpts').hidden = on || !OPT_TYPES.has(pickedType);
+    if (on) renderOptList();
+  }
+  $('#showOpts').onclick = () => { setOptsMode(true); $('#optQ').focus(); };
+  $('#hideOpts').onclick = () => setOptsMode(false);
+  $('#optQ').addEventListener('input', e => {
+    clearTimeout(optTimer);
+    optTimer = setTimeout(() => searchPlaces(e.target.value.trim(), $('#optResults'), p => {
+      draftOpts.push({ id: uid(), name: p.name, place: p, maps: '' }); $('#optQ').value = ''; renderOptList();
+    }), 350);
+  });
+  $('#optLinkBtn').onclick = () => { $('#optLinkBtn').hidden = true; $('#optLinkForm').hidden = false; $('#optName').focus(); };
+  $('#optAdd').onclick = () => {
+    const name = $('#optName').value.trim(), url = normaliseUrl($('#optUrl').value.trim());
+    if (!name) { flagError($('#optName')); return; }
+    if (!url) { flagError($('#optUrl')); return; }
+    draftOpts.push({ id: uid(), name, place: null, maps: url });
+    $('#optName').value = ''; $('#optUrl').value = ''; renderOptList();
+  };
+  ['optName', 'optUrl', 'optQ', 'placeQ'].forEach(id => $('#' + id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (id === 'optUrl') $('#optAdd').click(); } }));
+  ['optName', 'optUrl'].forEach(id => $('#' + id).addEventListener('input', e => e.target.classList.remove('invalid')));
+
   $('#showLink').onclick = () => { $('#showLink').hidden = true; $('#linkField').hidden = false; form.maps.focus(); };
   $('#placeQ').addEventListener('input', e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => searchPlaces(e.target.value.trim()), 350); });
 
   // Links that open the user's preferred maps app
   // Timeline "Map" pill: pasted link first, otherwise Google Maps
-  function primaryMapUrl(x) { return x.maps || (x.place ? `https://www.google.com/maps/search/?api=1&query=${x.place.lat},${x.place.lon}` : ''); }
+  const gmaps = p => `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`;
+  const undecided = x => (x.options?.length || 0) > 0 && !x.options.some(o => o.id === x.decided);
+  // The location that counts: the picked option, or the item's own place/link
+  function effLoc(x) {
+    if (x.options?.length) { const o = x.options.find(o => o.id === x.decided); return o ? { place: o.place || null, maps: o.maps || '' } : null; }
+    return { place: x.place || null, maps: x.maps || '' };
+  }
+  function primaryMapUrl(x) { const l = effLoc(x); return !l ? '' : l.maps || (l.place ? gmaps(l.place) : ''); }
+  const optionUrl = o => o.maps || (o.place ? gmaps(o.place) : '');
   function openInLinks(p) {
     const ll = `${p.lat},${p.lon}`, q = encodeURIComponent(p.name);
     return [
