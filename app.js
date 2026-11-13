@@ -288,8 +288,8 @@
   /* ---------- item drawer ---------- */
   const form = $('#itemForm');
   let editing = null, pickedType = 'activity', pendingStart = '';
-  const PLACEHOLDER = { activity: 'e.g. Beach', meal: 'Meal', rest: 'Rest', transport: 'e.g. Grab to airport', other: 'e.g. Shopping' };
-  const DEFAULT_TITLE = { rest: 'Rest', meal: 'Meal' };
+  const PLACEHOLDER = { activity: 'Activity', meal: 'Meal', rest: 'Rest', transport: 'Transport', other: 'Other' };
+  const DEFAULT_TITLE = PLACEHOLDER;
   const OPT_TYPES = new Set(['meal', 'activity']);   // types that can list options   // used when the title is left empty
 
   // Step 1: card picker
@@ -333,10 +333,10 @@
     form.start.value = pendingStart;
     form.end.value = item?.end || '';
     form.maps.value = item?.maps || '';
-    $('#linkField').hidden = !item?.maps; $('#showLink').hidden = !!item?.maps;
+    openLinkField(!!item?.maps);
     setPlace(item?.place || null); $('#placeQ').value = ''; $('#placeResults').innerHTML = '';
     draftOpts = structuredClone(item?.options || []); draftDecided = item?.decided || null;
-    $('#optQ').value = ''; $('#optResults').innerHTML = ''; $('#optLinkForm').hidden = true; $('#optLinkBtn').hidden = false;
+    $('#optQ').value = ''; $('#optResults').innerHTML = ''; asHeading($('#optLinkBtn'), false); $('#optLinkForm').hidden = true;
     form.notes.value = item?.notes || '';
     $('#timeErr').hidden = true; ['title', 'start', 'end'].forEach(n => form[n].classList.remove('invalid', 'shake'));
     $('#delItem').hidden = !item; $('#delItem').textContent = 'Delete'; $('#delItem').dataset.armed = '';
@@ -428,7 +428,7 @@
     btn.innerHTML = `${icon('rest')}<span>Same as before: <b>${esc(label)}</b></span>`;
     btn.onclick = () => {
       if (prev.place) setPlace({ ...prev.place });
-      if (prev.maps) { form.maps.value = prev.maps; $('#linkField').hidden = false; $('#showLink').hidden = true; }
+      if (prev.maps) { form.maps.value = prev.maps; openLinkField(true); }
       btn.hidden = true;
     };
     btn.hidden = false;
@@ -500,7 +500,10 @@
       draftOpts.push({ id: uid(), name: p.name, place: p, maps: '' }); $('#optQ').value = ''; renderOptList();
     }), 350);
   });
-  $('#optLinkBtn').onclick = () => { $('#optLinkBtn').hidden = true; $('#optLinkForm').hidden = false; $('#optName').focus(); };
+  // A link button turns into the heading of the fields it reveals
+  function asHeading(btn, on) { btn.classList.toggle('as-head', on); btn.disabled = on; }
+  function openLinkField(on) { asHeading($('#showLink'), on); $('#linkField').hidden = !on; }
+  $('#optLinkBtn').onclick = () => { asHeading($('#optLinkBtn'), true); $('#optLinkForm').hidden = false; $('#optName').focus(); };
   $('#optAdd').onclick = () => {
     const name = $('#optName').value.trim(), url = normaliseUrl($('#optUrl').value.trim());
     if (!name) { flagError($('#optName')); return; }
@@ -511,7 +514,7 @@
   ['optName', 'optUrl', 'optQ', 'placeQ'].forEach(id => $('#' + id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (id === 'optUrl') $('#optAdd').click(); } }));
   ['optName', 'optUrl'].forEach(id => $('#' + id).addEventListener('input', e => e.target.classList.remove('invalid')));
 
-  $('#showLink').onclick = () => { $('#showLink').hidden = true; $('#linkField').hidden = false; form.maps.focus(); };
+  $('#showLink').onclick = () => { openLinkField(true); form.maps.focus(); };
   $('#placeQ').addEventListener('input', e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => searchPlaces(e.target.value.trim()), 350); });
 
   // Links that open the user's preferred maps app
