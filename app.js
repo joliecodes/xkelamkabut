@@ -1110,7 +1110,6 @@
   const STARTER = [
     ['Documents & money', ['Passports', 'Travel insurance', 'Booking confirmations', 'Some local cash', 'Main + backup card']],
     ['Medicine', ['Paracetamol', 'Stomach medicine', 'Plasters', 'Insect repellent', 'Any regular prescriptions']],
-    ['Beach', ['Swimwear', 'Sunscreen', 'Hat', 'Sunglasses', 'Waterproof phone pouch', 'Beach towel']],
     ['Tech', ['Phone charger', 'Power bank', 'Travel adapter', 'eSIM / data plan']],
     ['Clothes', ['Tops', 'Bottoms', 'Underwear', 'Sleepwear', 'Light jacket']],
   ];
@@ -1144,9 +1143,16 @@
     $('.packtop').hidden = !me.sections.length;
 
     const list = $('#packList');
-    if (!me.sections.length) {
-      list.innerHTML = `<div class="pempty"><div class="big" style="color:var(--sea)">${icon('bag')}</div><p><b>${esc(me.name)}'s list is empty</b></p><p class="muted">Start from a list, copy someone else's, or build your own.</p><button type="button" class="btn" id="packBegin">Start packing list</button></div>`;
+    const whose = P.travelers.indexOf(me) === 0 ? 'Your list' : `${esc(me.name)}'s list`;
+    if (!me.sections.length && !me.started) {
+      // First thing on an empty list: the Start button
+      list.innerHTML = `<div class="pstart"><button type="button" class="btn" id="packBegin">${icon('bag')}Start packing list</button><p><b>${whose} is empty</b></p><p class="muted">Start from a list, copy someone else's, or build your own.</p></div>`;
       $('#packBegin').onclick = openPackStart;
+      return;
+    }
+    if (!me.sections.length) {
+      list.innerHTML = `<div class="pstart"><button type="button" class="btn" id="packFirstCat">${icon('plus')}Add a category</button><p><b>${whose} is empty</b></p><p class="muted">Categories keep things tidy, e.g. Clothes, Toiletries, Documents.</p></div>`;
+      $('#packFirstCat').onclick = () => $('#addCat').click();
       return;
     }
     list.innerHTML = '';
@@ -1188,20 +1194,21 @@
       onSave: v => { me.name = v; save(); renderPacking(); },
       onDelete: P.travelers.length > 1 ? () => { P.travelers = P.travelers.filter(t => t !== me); P.cur = P.travelers[0].id; save(); renderPacking(); toast('Traveller removed'); } : null });
   };
-  $('#addCat').onclick = () => openPrompt({ title: 'New category', placeholder: 'e.g. Toiletries', onSave: v => { curTraveler().sections.push(mkSection(v)); save(); renderPacking(); } });
+  $('#addCat').onclick = () => openPrompt({ title: 'New category', placeholder: 'e.g. Toiletries', onSave: v => { const me = curTraveler(); me.started = true; me.sections.push(mkSection(v)); save(); renderPacking(); } });
   $('#untickAll').onclick = () => { curTraveler().sections.forEach(s => s.items.forEach(i => i.done = false)); save(); renderPacking(); toast('All unticked'); };
   function openPackStart() {
     const me = curTraveler();
     const here = trip.packing.travelers.filter(t => t !== me && t.sections.length).map(t => ['t:' + t.id, `Copy from ${t.name}`, `${t.sections.length} categories · ${countOf(t)[1]} items`]);
     const others = db.trips.filter(t => t !== trip).flatMap(t => t.packing.travelers.filter(tr => tr.sections.length).map(tr => ['o:' + t.id + ':' + tr.id, `Copy from ${t.title} · ${tr.name}`, `${countOf(tr)[1]} items`]));
-    const opts = [['starter', 'Starter list', 'Documents, medicine, beach, tech, clothes'], ...here, ...others, ['blank', 'Blank list', 'Add your own categories']];
+    const opts = [['starter', 'Starter list', 'Documents, medicine, tech, clothes'], ...here, ...others, ['blank', 'Blank list', 'Add your own categories']];
     $('#packStartOpts').innerHTML = opts.map(([v, l, d]) => `<button type="button" data-v="${esc(v)}">${esc(l)}<small>${esc(d)}</small></button>`).join('');
     $('#packStartOpts').querySelectorAll('button').forEach(btn => btn.onclick = () => {
       const v = btn.dataset.v, clone = src => src.sections.map(s => mkSection(s.name, s.items.map(i => i.text)));
       if (v === 'starter') me.sections = STARTER.map(([n, items]) => mkSection(n, items));
       else if (v.startsWith('t:')) me.sections = clone(trip.packing.travelers.find(t => t.id === v.slice(2)));
       else if (v.startsWith('o:')) { const [, tid, rid] = v.split(':'); me.sections = clone(db.trips.find(t => t.id === tid).packing.travelers.find(t => t.id === rid)); }
-      else me.sections = [mkSection('Essentials')];
+      else me.sections = [];
+      me.started = true;
       save(); hide(); renderPacking();
     });
     show('#packStart');

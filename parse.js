@@ -28,6 +28,55 @@
   const AIRLINES = ['AirAsia X', 'AirAsia', 'Malaysia Airlines', 'Batik Air', 'Firefly', 'MYAirline', 'Singapore Airlines', 'Scoot', 'Jetstar', 'VietJet Air', 'Vietjet', 'Vietnam Airlines', 'Bamboo Airways', 'Thai AirAsia', 'Thai Airways', 'Garuda Indonesia', 'Lion Air', 'Cebu Pacific', 'Philippine Airlines', 'Cathay Pacific', 'Emirates', 'Qatar Airways', 'Etihad', 'Turkish Airlines', 'Japan Airlines', 'ANA', 'Korean Air', 'EVA Air', 'China Airlines', 'Qantas', 'British Airways', 'KLM', 'Lufthansa'];
   const NOT_AIRPORT = new Set(['GMT', 'UTC', 'THE', 'AND', 'FOR', 'PDF', 'USD', 'MYR', 'VND', 'SGD', 'THB', 'IDR', 'EUR', 'GBP', 'AUD', 'JPY', 'KRW', 'PNR', 'ETA', 'ETD', 'VAT', 'GST', 'SST', 'ID', 'NON']);
 
+  // Airport names as written on tickets -> [code, city]
+  const AIRPORT_NAMES = [
+    [/kuala\s*lumpur|klia/i, 'KUL', 'Kuala Lumpur'], [/doha|hamad/i, 'DOH', 'Doha'], [/charles\s*de\s*gaulle/i, 'CDG', 'Paris'], [/orly/i, 'ORY', 'Paris'],
+    [/dubai/i, 'DXB', 'Dubai'], [/abu\s*dhabi/i, 'AUH', 'Abu Dhabi'], [/changi|singapore/i, 'SIN', 'Singapore'], [/suvarnabhumi/i, 'BKK', 'Bangkok'],
+    [/don\s*mueang/i, 'DMK', 'Bangkok'], [/heathrow/i, 'LHR', 'London'], [/gatwick/i, 'LGW', 'London'], [/narita/i, 'NRT', 'Tokyo'], [/haneda/i, 'HND', 'Tokyo'],
+    [/kansai/i, 'KIX', 'Osaka'], [/incheon/i, 'ICN', 'Seoul'], [/hong\s*kong/i, 'HKG', 'Hong Kong'], [/tan\s*son\s*nhat|ho\s*chi\s*minh/i, 'SGN', 'Ho Chi Minh City'],
+    [/noi\s*bai|hanoi/i, 'HAN', 'Hanoi'], [/da\s*nang/i, 'DAD', 'Da Nang'], [/phu\s*quoc/i, 'PQC', 'Phu Quoc'], [/penang/i, 'PEN', 'Penang'], [/langkawi/i, 'LGK', 'Langkawi'],
+    [/kota\s*kinabalu/i, 'BKI', 'Kota Kinabalu'], [/kuching/i, 'KCH', 'Kuching'], [/istanbul/i, 'IST', 'Istanbul'], [/soekarno|jakarta/i, 'CGK', 'Jakarta'],
+    [/ngurah\s*rai|denpasar|\bbali\b/i, 'DPS', 'Bali'], [/taoyuan|taipei/i, 'TPE', 'Taipei'], [/ninoy|manila/i, 'MNL', 'Manila'], [/sydney/i, 'SYD', 'Sydney'],
+    [/melbourne/i, 'MEL', 'Melbourne'], [/frankfurt/i, 'FRA', 'Frankfurt'], [/schiphol|amsterdam/i, 'AMS', 'Amsterdam'], [/zurich/i, 'ZRH', 'Zurich'],
+    [/fiumicino|\brome\b/i, 'FCO', 'Rome'], [/madrid/i, 'MAD', 'Madrid'], [/barcelona/i, 'BCN', 'Barcelona'], [/munich/i, 'MUC', 'Munich'], [/jeddah/i, 'JED', 'Jeddah'], [/muscat/i, 'MCT', 'Muscat'],
+  ];
+  const airportFromName = s => { const a = AIRPORT_NAMES.find(([re]) => re.test(s || '')); return a ? { code: a[1], city: a[2] } : null; };
+  const titleCase = s => clean(s).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+
+  // Table-style e-tickets: "FROM-NAME   TO-NAME   QR39   08:10   13:15" with names
+  // and dates continuing on the next line ("INTERNATIONAL   GAULLE   28Jan2027 28Jan2027")
+  function parseTableFlights(text) {
+    const year = yearIn(text), ref = bookingRef(text);
+    const lines = text.split('\n');
+    const rowRe = /^(.*?)\b([A-Z]{2}|[A-Z]\d|\d[A-Z])\s?(\d{1,4})\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})/;
+    const rows = lines.map((l, i) => [l.match(rowRe), i]).filter(([m]) => m && !/^\d+$/.test(m[2]));
+    return rows.map(([m, i], k) => {
+      const next = (lines[i + 1] || '').replace(/^[_\s]+/, '');
+      const dates = [...next.matchAll(new RegExp(DATE_RE.source, 'gi'))].map(d => parseDate(d[1], year)).filter(Boolean);
+      const cont = next.replace(new RegExp(DATE_RE.source, 'gi'), '').split(/\s{3,}/).map(clean).filter(Boolean);
+      const head = m[1].split(/\s{3,}/).map(clean).filter(Boolean);
+      const fromName = [head[0], cont[0]].filter(Boolean).join(' '), toName = [head[1], cont[1]].filter(Boolean).join(' ');
+      const sec = lines.slice(i, rows[k + 1]?.[1] ?? Math.min(lines.length, i + 12)).join('\n');
+      const A = airportFromName(fromName), B = airportFromName(toName);
+      const dur = sec.match(/duration\s*:?\s*(\d{1,2}):(\d{2})/i);
+      const bag = sec.match(/baggage[^:\n]*:\s*(\d+)\s*k(?:gs?)?\b/i);
+      const operated = clean((sec.match(/operated\s*by\s*:?\s*([A-Za-z .'-]+?)(?:\s{3,}|$)/im) || [])[1]);
+      const marketed = clean((sec.match(/marketed\s*by\s*:?\s*([A-Za-z .'-]+?)(?:\s{3,}|$)/im) || [])[1]);
+      const terminal = (sec.match(/terminal\s*:?\s*\w+/i) || [])[0] || '';
+      return {
+        airline: titleCase(marketed || operated || ''),
+        flightNo: `${m[2]} ${m[3]}`, ref,
+        from: A?.code || '', to: B?.code || '',
+        fromCity: A?.city || titleCase(fromName), toCity: B?.city || titleCase(toName),
+        depDate: dates[0] || '', depTime: time24(m[4]),
+        arrDate: dates[1] || dates[0] || '', arrTime: time24(m[5]),
+        duration: dur ? `${+dur[1]}h${+dur[2] ? ' ' + (+dur[2]) + 'm' : ''}` : '',
+        seats: '', baggage: bag ? `${bag[1]}kg checked` : '',
+        notes: [terminal.replace(/\s*:\s*/, ' '), operated && marketed && operated.toLowerCase() !== marketed.toLowerCase() ? `Operated by ${titleCase(operated)}` : ''].filter(Boolean).join(' · '),
+      };
+    }).sort((a, b) => (a.depDate + a.depTime).localeCompare(b.depDate + b.depTime));
+  }
+
   function detectKind(t) {
     const f = (t.match(/\b(flight|airline|airport|depart|boarding|baggage|carry-on|seat \d|terminal|PNR|non-stop)\b/gi) || []).length;
     const s = (t.match(/\b(hotel|check-?in|check-?out|room type|property|arrival|guest|nights?|resort|agoda|booking\.com|voucher)\b/gi) || []).length;
@@ -36,8 +85,9 @@
   }
 
   function bookingRef(t) {
-    const m = t.match(/\b(?:booking\s*(?:no|number|ref(?:erence)?|code|id)|confirmation\s*(?:no|number|code)?|PNR|record locator|reservation\s*(?:no|number|code)?)\.?\s*[:#]?\s*\n?\s*([A-Z0-9][A-Z0-9-]{4,14})\b/i);
-    return m ? m[1] : '';
+    const re = /\b(?:booking\s*(?:no|number|ref(?:erence)?|code|id)|confirmation\s*(?:no|number|code)?|PNR|record locator|reservation\s*(?:no|number|code)?)\.?\s*[:#]?\s*\n?\s*(?:[A-Z0-9]{1,3}\/)?([A-Za-z0-9][A-Za-z0-9-]{4,14})\b/gi;
+    for (const m of t.matchAll(re)) if (/^[A-Z0-9-]+$/.test(m[1]) && /\d|^[A-Z]{5,8}$/.test(m[1])) return m[1];
+    return '';
   }
 
   /* ---------- flights ---------- */
@@ -163,7 +213,11 @@
 
   function parseBooking({ text, cols }) {
     const kind = detectKind(text);
-    if (kind === 'flight') return { kind, flights: parseFlights(text) };
+    if (kind === 'flight') {
+      const hasLegs = /^\s*(leg|segment|sector)\s*\d+/im.test(text);
+      const table = hasLegs ? [] : parseTableFlights(text);
+      return { kind, flights: table.length ? table : parseFlights(text) };
+    }
     if (kind === 'stay') return { kind, stay: parseStay(text, cols) };
     return { kind: 'other', other: { ref: bookingRef(text), date: parseDate((text.match(DATE_RE) || [])[0], yearIn(text)) } };
   }

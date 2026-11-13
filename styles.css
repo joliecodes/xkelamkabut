@@ -344,3 +344,8 @@ form textarea{min-height:70px}
 .days.filt button b{font-size:14px}
 .bprog{display:inline-flex;align-items:center;gap:6px;background:var(--ink);color:#fff;border-radius:99px;padding:6px 12px;font-size:12px;font-weight:600;margin-bottom:10px;letter-spacing:.2px}
 .bprog span{opacity:.7;font-weight:500}
+
+.pstart{text-align:center;padding:18px 8px 30px}
+.pstart .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:15px;font-size:16px;margin-bottom:18px}
+.pstart .btn .ico{width:20px;height:20px}
+.pstart p{margin-top:4px}
