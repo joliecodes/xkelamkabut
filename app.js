@@ -1050,10 +1050,15 @@
 
   // New trip
   const ntf = $('#newTripForm');
-  $('#newTripBtn').onclick = () => { ntf.title.value = ''; ntf.start.value = todayISO(); ntf.days.value = 3; show('#newTrip'); };
+  $('#newTripBtn').onclick = () => { ntf.title.value = ''; ntf.start.value = todayISO(); ntf.end.value = addDays(todayISO(), 2); ntf.dataset.endTouched = ''; $('#ntErr').hidden = true; show('#newTrip'); };
+  // End date follows the start date until it's changed by hand
+  ntf.start.addEventListener('change', () => { if (!ntf.dataset.endTouched && ntf.start.value) ntf.end.value = addDays(ntf.start.value, 2); $('#ntErr').hidden = true; });
+  ntf.end.addEventListener('change', () => { ntf.dataset.endTouched = '1'; $('#ntErr').hidden = true; });
   ntf.addEventListener('submit', e => {
     e.preventDefault();
-    const n = Math.max(1, Math.min(30, +ntf.days.value || 1));
+    const s0 = ntf.start.value || todayISO(), e0 = ntf.end.value || s0;
+    if (e0 < s0) { $('#ntErr').textContent = 'End date is before the start date.'; $('#ntErr').hidden = false; flagError(ntf.end); return; }
+    const n = Math.min(60, Math.round((new Date(e0 + 'T00:00:00') - new Date(s0 + 'T00:00:00')) / 864e5) + 1);
     const t = normTrip({ title: ntf.title.value.trim() || 'New trip', days: Array.from({ length: n }, (_, i) => ({ id: uid(), date: addDays(ntf.start.value || todayISO(), i), label: '', items: [] })) }, db.trips.length);
     db.trips.push(t); save(); hide(); toast('Trip created');
     openTrip(t.id);
