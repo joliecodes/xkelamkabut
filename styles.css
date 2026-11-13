@@ -342,3 +342,5 @@ form textarea{min-height:70px}
 .days.filt{margin-top:4px}
 .days.filt button{min-width:0;padding:8px 14px}
 .days.filt button b{font-size:14px}
+.bprog{display:inline-flex;align-items:center;gap:6px;background:var(--ink);color:#fff;border-radius:99px;padding:6px 12px;font-size:12px;font-weight:600;margin-bottom:10px;letter-spacing:.2px}
+.bprog span{opacity:.7;font-weight:500}

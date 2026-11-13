@@ -629,14 +629,17 @@
     if (!onTrips) {
       f.title.value = trip.title || '';
       f.start.value = trip.days[0]?.date || todayISO();
-      f.days.value = trip.days.length || 1;
+      f.end.value = trip.days.at(-1)?.date || f.start.value;
       $('#setErr').hidden = true; f.dataset.armed = '';
     }
     show('#settings');
   };
   $('#tripSetForm').addEventListener('submit', e => {
     e.preventDefault();
-    const f = e.target, n = Math.max(1, Math.min(60, +f.days.value || 1));
+    const f = e.target;
+    const s0 = f.start.value || trip.days[0]?.date || todayISO(), e0 = f.end.value || s0;
+    if (e0 < s0) { $('#setErr').textContent = 'End date is before the start date.'; $('#setErr').hidden = false; return; }
+    const n = Math.min(60, Math.round((new Date(e0 + 'T00:00:00') - new Date(s0 + 'T00:00:00')) / 864e5) + 1);
     const removing = trip.days.slice(n), lost = removing.reduce((c, d) => c + d.items.length, 0);
     if (lost && !f.dataset.armed) {
       $('#setErr').textContent = `This removes ${removing.length} day${removing.length > 1 ? 's' : ''} with ${lost} item${lost > 1 ? 's' : ''}. Tap Save again to confirm.`;
@@ -657,7 +660,7 @@
     cur = Math.min(cur, trip.days.length - 1);
     save(); hide(); renderHeader(); renderDays(); renderGrid(); toast('Trip updated');
   });
-  ['days', 'start'].forEach(n => $('#tripSetForm')[n].addEventListener('input', () => { $('#tripSetForm').dataset.armed = ''; $('#setErr').hidden = true; }));
+  ['end', 'start'].forEach(n => $('#tripSetForm')[n].addEventListener('input', () => { $('#tripSetForm').dataset.armed = ''; $('#setErr').hidden = true; }));
 
   /* ---------- day switching: tabs + swipe ---------- */
   function changeDay(i, dir) {
@@ -722,7 +725,7 @@
   // UTC offsets (hours) for common airports; used only when the flight time is unknown
   const AIRPORT_TZ = { KUL: 8, PEN: 8, LGK: 8, BKI: 8, KCH: 8, JHB: 8, SZB: 8, SIN: 8, HKG: 8, MFM: 8, TPE: 8, MNL: 8, CEB: 8, DPS: 8, PEK: 8, PVG: 8, CAN: 8, PER: 8,
     PQC: 7, SGN: 7, HAN: 7, DAD: 7, CXR: 7, BKK: 7, DMK: 7, HKT: 7, CNX: 7, USM: 7, KBV: 7, CGK: 7, PNH: 7, REP: 7, VTE: 7,
-    RGN: 6.5, DAC: 6, KTM: 5.75, DEL: 5.5, BOM: 5.5, CMB: 5.5, MLE: 5, DXB: 4, AUH: 4, DOH: 3, IST: 3, NRT: 9, HND: 9, KIX: 9, ICN: 9, GMP: 9, LHR: 0, CDG: 1, FRA: 1, AMS: 1, SYD: 11, MEL: 11, BNE: 10 };
+    RGN: 6.5, DAC: 6, DXB: 4, DWC: 4, MCT: 4, JED: 3, RUH: 3, NCE: 1, FCO: 1, MAD: 1, BCN: 1, MUC: 1, ZRH: 1, KTM: 5.75, DEL: 5.5, BOM: 5.5, CMB: 5.5, MLE: 5, DXB: 4, AUH: 4, DOH: 3, IST: 3, NRT: 9, HND: 9, KIX: 9, ICN: 9, GMP: 9, LHR: 0, CDG: 1, FRA: 1, AMS: 1, SYD: 11, MEL: 11, BNE: 10 };
   const parseDur = s => { const m = (s || '').match(/(\d{1,2})\s*h\D*?(\d{1,2})?\s*m?/i); return m ? +m[1] * 60 + (+m[2] || 0) : null; };
   const fmtDur = m => `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}`;
   // From local departure/arrival times: real flight length and the clock change on landing
@@ -769,7 +772,7 @@
     ] },
   };
   const bForm = $('#bookForm');
-  let bEditing = null, bKind = 'flight', bQueue = [], bFilter = 'all';
+  let bEditing = null, bKind = 'flight', bQueue = [], bFilter = 'all', bTotal = 0, bIndex = 0;
 
   const shortDate = iso => iso ? fmtDate(iso, { weekday: 'short', day: 'numeric', month: 'short' }) : '';
   const nights = (a, b) => (a && b) ? Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5) : 0;
@@ -826,7 +829,8 @@
 
   // Drawer: step 1 pick a kind (or upload), step 2 the form
   function openBooking(b, prefill) {
-    bEditing = b; $('#bfound').hidden = true;
+    bEditing = b; $('#bfound').hidden = true; $('#bprog').hidden = true;
+    if (b) bTotal = 0;
     if (b || prefill) { bKind = b?.kind || prefill.kind; bStep2(b || prefill.data, !!prefill); }
     else bStep1();
     show('#bookDrawer');
@@ -851,10 +855,17 @@
       if (fromPdf && v) { el.classList.add('filled'); filled++; }
       el.addEventListener('input', () => el.classList.remove('filled'), { once: true });
     });
+    // "Flight 2 of 4 · DXB → CDG" while working through a multi-booking PDF
+    const many = fromPdf && bTotal > 1;
+    $('#bprog').hidden = !many;
+    if (many) {
+      const route = bKind === 'flight' && (data.from || data.to) ? ` <span>·</span> ${esc(data.from || '?')} → ${esc(data.to || '?')}` : '';
+      $('#bprog').innerHTML = `${BOOK[bKind].label} ${bIndex} of ${bTotal}${route}`;
+    }
     if (fromPdf) {
       $('#bfound').hidden = false;
       $('#bfound').innerHTML = filled
-        ? `<b>Filled in ${filled} field${filled > 1 ? 's' : ''} from your PDF.</b> Check the highlighted ones before saving.${bQueue.length ? ` Next: ${bQueue.length} more booking${bQueue.length > 1 ? 's' : ''} from the same PDF.` : ''}`
+        ? `<b>Filled in ${filled} field${filled > 1 ? 's' : ''} from your PDF.</b> Check the highlighted ones before saving.`
         : `<b>Couldn't find details in this PDF.</b> Please fill them in by hand.`;
     }
     $('#bsync').checked = bEditing ? !!bEditing.itemIds?.length : true;
@@ -862,7 +873,7 @@
     $('#bstep2').classList.add('on'); $('#bstep1').classList.remove('on');
   }
   $('#bback').onclick = () => { if (!bEditing) bStep1(); else hide(); };
-  $('#addBooking').onclick = () => { bQueue = []; openBooking(null); };
+  $('#addBooking').onclick = () => { bQueue = []; bTotal = 0; openBooking(null); };
 
   bForm.addEventListener('submit', e => {
     e.preventDefault();
@@ -874,7 +885,7 @@
     const skipped = $('#bsync').checked ? linkBooking(b) : [];
     save(); renderBookings(); renderGrid();
     toast(skipped.length ? `Saved. Not added to itinerary: ${skipped.join(', ')}` : 'Saved');
-    if (bQueue.length) { const next = bQueue.shift(); bEditing = null; bPrefillExtra = next.data; bKind = next.kind; bStep2(next.data, true); }
+    if (bQueue.length) { const next = bQueue.shift(); bIndex++; bEditing = null; bPrefillExtra = next.data; bKind = next.kind; bStep2(next.data, true); }
     else hide();
   });
   $('#bdel').onclick = e => {
@@ -972,6 +983,7 @@
         : r.kind === 'stay' ? [{ kind: 'stay', data: r.stay }]
         : [{ kind: uploadFrom === 'uploadPdf2' ? bKind : 'other', data: r.other || {} }];
       if (!found.length) found.push({ kind: uploadFrom === 'uploadPdf2' ? bKind : 'flight', data: {} });
+      bTotal = found.length; bIndex = 1;
       const first = found.shift(); bQueue = found;
       bEditing = null; bPrefillExtra = first.data; bKind = first.kind;
       bStep2(first.data, true);

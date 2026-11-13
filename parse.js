@@ -14,14 +14,14 @@
     if (!s) return '';
     let m;
     if ((m = s.match(/(\d{4})-(\d{2})-(\d{2})/))) return iso(+m[1], +m[2], +m[3]);
-    if ((m = s.match(new RegExp(`(\\d{1,2})(?:st|nd|rd|th)?\\s+${MON}\\.?,?\\s*(\\d{4})?`, 'i'))))
+    if ((m = s.match(new RegExp(`(\\d{1,2})(?:st|nd|rd|th)?\\s*${MON}\\.?,?\\s*(\\d{4})?`, 'i'))))
       return iso(+(m[3] || fallbackYear), MONTHS[m[2].slice(0, 3).toLowerCase()], +m[1]);
     if ((m = s.match(new RegExp(`${MON}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s*(\\d{4})?`, 'i'))))
       return iso(+(m[3] || fallbackYear), MONTHS[m[1].slice(0, 3).toLowerCase()], +m[2]);
     if ((m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/))) return iso(+m[3], +m[2], +m[1]);
     return '';
   }
-  const DATE_RE = new RegExp(`(\\d{4}-\\d{2}-\\d{2}|\\d{1,2}(?:st|nd|rd|th)?\\s+${MON}\\.?,?(?:\\s*\\d{4})?|${MON}\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?,?(?:\\s*\\d{4})?|\\d{1,2}/\\d{1,2}/\\d{4})`, 'i');
+  const DATE_RE = new RegExp(`(\\d{4}-\\d{2}-\\d{2}|\\d{1,2}(?:st|nd|rd|th)?\\s*${MON}\\.?,?(?:\\s*\\d{4})?|${MON}\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?,?(?:\\s*\\d{4})?|\\d{1,2}/\\d{1,2}/\\d{4})`, 'i');
   const yearIn = t => +((t.match(/\b(20\d{2})\b/) || [])[1] || new Date().getFullYear());
   const time24 = s => { const m = (s || '').match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i); if (!m) return ''; let h = +m[1]; if (m[3]) { const pm = /pm/i.test(m[3]); if (h === 12) h = pm ? 12 : 0; else if (pm) h += 12; } return `${pad(h)}:${m[2]}`; };
 
@@ -54,10 +54,12 @@
       if (m && !NOT_AIRPORT.has(m[1]) && !NOT_AIRPORT.has(m[2])) pairs.push([m[1], m[2]]);
     });
 
-    // Sections that start with a heading holding a full date ("Depart: Monday, 30 November 2026")
+    // Sections: "Leg 1 of 4 | Kuala Lumpur (KUL) to Dubai (DXB)" style headings first,
+    // otherwise headings holding a full date ("Depart: Monday, 30 November 2026")
     const lines = text.split('\n');
-    const heads = [];
-    lines.forEach((l, i) => {
+    let heads = [];
+    lines.forEach((l, i) => { if (/^\s*(leg|segment|sector)\s*\d+/i.test(l) || /^\s*flight\s*\d+\s*of\s*\d+/i.test(l)) heads.push(i); });
+    if (!heads.length) lines.forEach((l, i) => {
       if (/^\s*(depart(?:ure)?|return|outbound|inbound|onward|flight\s*\d)\b/i.test(l) && DATE_RE.test(l) && /\d{4}/.test(l)) heads.push(i);
     });
     let sections = heads.map((h, k) => lines.slice(h, heads[k + 1] ?? lines.length).join('\n'));
@@ -72,37 +74,51 @@
     const addons = text.split(/\n(?=[A-Z][A-Za-z .'-]+ to [A-Z][A-Za-z .'-]+\n)/).slice(1);
     const seatsPerLeg = addons.map(b => [...b.matchAll(/\bSeat\s*(\d{1,2}[A-K])\b/gi)].map(m => m[1]));
     const allSeats = [...text.matchAll(/\bSeat\s*(\d{1,2}[A-K])\b/gi)].map(m => m[1]);
-    const bag = (text.match(/checked\s*baggage\s*(\d+\s?kg)/i) || text.match(/(\d+\s?kg)\s*checked/i) || [])[1] || '';
+    const kg = s => s ? s.replace(/\s/g, '').replace(/kgs$/i, 'kg') : '';
+    const bagAll = (text.match(/checked\s*baggage\s*(\d+\s?kgs?)/i) || text.match(/(\d+\s?kgs?)\s*checked/i) || text.match(/\bbaggage\s*:?\s*(\d+\s?kgs?)\b/i) || [])[1] || '';
     const carry = (text.match(/(\d+\s?kg)\s*carry-?on/i) || [])[1] || '';
 
-    const flights = sections.map((sec, k) => {
-      const head = sec.split('\n')[0];
-      const depDate = parseDate(head, year);
+    let flights = sections.map((sec, k) => {
+      const secLines = sec.split('\n');
+      const head = secLines[0];
+      const body = secLines.filter(l => !/validity|not (before|after)|booking date|issued/i.test(l)).join('\n');
       const fn = [...sec.matchAll(flightNoRe)].find(m => !/^\d+$/.test(m[1]) && !/^GMT/i.test(sec.slice(Math.max(0, m.index - 3), m.index + 3)));
       const airline = (sec.match(airlineRe) || [])[1] || '';
-      const times = [...sec.matchAll(/\b(\d{1,2}:\d{2}\s*(?:am|pm)?)/gi)].map(m => time24(m[1]));
-      // short dates inside the section ("30 Nov", "03 Dec"): the last one is the arrival date
-      const short = [...sec.split('\n').slice(1).join('\n').matchAll(new RegExp(`\\b(\\d{1,2}\\s+${MON})\\b`, 'gi'))].map(m => parseDate(m[1], year));
-      const cityLines = sec.split('\n').filter(l => /^\s*\d{1,2}:\d{2}/.test(l)).map(l => clean(l.replace(/^\s*\d{1,2}:\d{2}\s*(am|pm)?/i, '')));
+      // "Check-in at" layouts list check-in time first, then departure, then arrival
+      const hasCheckin = /check[- ]?in\s*(at|time|opens|closes)/i.test(sec);
+      const times = [...body.matchAll(/\b(\d{1,2}:\d{2}\s*(?:am|pm)?)/gi)].map(m => time24(m[1]));
+      const off = hasCheckin && times.length >= 3 ? 1 : 0;
+      const dates = [...body.matchAll(new RegExp(DATE_RE.source, 'gi'))].map(m => parseDate(m[1], year)).filter(Boolean);
+      const headDate = /\d{4}/.test(head) ? parseDate(head, year) : '';
+      const depDate = headDate || dates[hasCheckin && dates.length >= 2 ? 1 : 0] || '';
+      // Route from the heading: "City (KUL) to City (DXB)"
+      const hr = head.match(/([A-Za-z .'-]+?)\s*\(([A-Z]{3})\)\s*(?:to|→|-|–)\s*([A-Za-z .'-]+?)\s*\(([A-Z]{3})\)/);
+      const pair = hr ? [hr[2], hr[4]] : (pairs[k] || []);
+      const cityLines = secLines.filter(l => /^\s*\d{1,2}:\d{2}/.test(l)).map(l => clean(l.replace(/^\s*(\d{1,2}:\d{2}\s*(am|pm)?\s*)+/i, '')));
       const terminal = (sec.match(/terminal\s*\w+/i) || [])[0] || '';
-      const pair = pairs[k] || [];
       const seats = seatsPerLeg[k]?.length ? seatsPerLeg[k] : (allSeats.length && sections.length ? allSeats.slice(k * allSeats.length / sections.length, (k + 1) * allSeats.length / sections.length) : []);
+      const bag = (sec.match(/\bbaggage\s*:?\s*(\d+\s?kgs?)\b/i) || [])[1] || bagAll;
+      const dur = sec.match(/\b(\d{1,2})\s*h(?:rs?)?\s*(\d{1,2})\s*m(?:in)?s?\b/i);
       return {
         airline,
         flightNo: fn ? `${fn[1]} ${fn[2]}` : '',
         ref,
         from: pair[0] || '', to: pair[1] || '',
-        fromCity: cityLines[0] || '', toCity: cityLines[1] || '',
-        depDate: depDate || short[0] || '',
-        depTime: times[0] || '',
-        arrDate: short.length > 1 ? short.at(-1) : (depDate || short[0] || ''),
-        arrTime: times[1] || '',
-        duration: (() => { const m = sec.match(/\b(\d{1,2})\s*h(?:rs?|ours?)?\s*(\d{1,2})?\s*m?(?:in)?\b/i); return m ? `${+m[1]}h${m[2] ? ' ' + (+m[2]) + 'm' : ''}` : ''; })(),
+        fromCity: hr ? clean(hr[1].replace(/^.*\|/, '')) : (cityLines[0] || ''),
+        toCity: hr ? clean(hr[3]) : (cityLines[1] || ''),
+        depDate,
+        depTime: times[off] || '',
+        arrDate: dates.length > 1 ? dates.at(-1) : depDate,
+        arrTime: times[off + 1] || '',
+        duration: dur ? `${+dur[1]}h${+dur[2] ? ' ' + (+dur[2]) + 'm' : ''}` : '',
         seats: seats.join(', '),
-        baggage: [bag && `${bag.replace(/\s/g, '')} checked`, carry && `${carry.replace(/\s/g, '')} carry-on`].filter(Boolean).join(' + '),
+        baggage: [bag && `${kg(bag)} checked`, carry && `${kg(carry)} carry-on`].filter(Boolean).join(' + '),
         notes: terminal,
       };
     }).filter(f => f.flightNo || f.depTime);
+    // one entry per flight, in date order
+    flights = flights.filter((f, i, a) => a.findIndex(g => g.flightNo === f.flightNo && g.depDate === f.depDate) === i)
+      .sort((a, b) => (a.depDate + a.depTime).localeCompare(b.depDate + b.depTime));
     return flights;
   }
 
