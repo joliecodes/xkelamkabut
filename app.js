@@ -226,8 +226,8 @@
 
     gridFrom = from;
     // Shorter items sit on top of longer ones, shifted in; items that start together go side by side
-    layoutNested(items).forEach(({ x, s, e, col, cols, depth, kids }) => {
-      const el = itemEl(x, s, e, { cols, depth, kids });
+    layoutNested(items).forEach(({ x, s, e, col, cols, depth, kids, room }) => {
+      const el = itemEl(x, s, e, { cols, depth, kids, room });
       const inset = depth * INDENT;
       el.style.top = `${y(s) + 1}px`;
       el.style.height = `${Math.max((e - s) / 60 * HOUR_PX - 3, 22)}px`;
@@ -255,9 +255,9 @@
   function layoutNested(items) {
     const placed = [];
     items.forEach(it => {
-      it.depth = 0; it.kids = false;
+      it.depth = 0; it.kids = false; it.room = null;
       placed.forEach(p => { if (p.s <= it.s - 30 && p.e > it.s && p.depth + 1 > it.depth) it.depth = p.depth + 1; });
-      placed.forEach(p => { if (p.s <= it.s - 30 && p.e > it.s) p.kids = true; });
+      placed.forEach(p => { if (p.s <= it.s - 30 && p.e > it.s) { p.kids = true; p.room = Math.min(p.room ?? 1e9, it.s - p.s); } });
       placed.push(it);
     });
     // within each depth, overlapping items share the width
@@ -411,10 +411,12 @@
     el.className = 'item' + (mins <= 30 || (mins < 60 && x.notes && cols === 1) ? ' short' : '') + (mins <= 30 ? '' : mins < 60 && x.notes && cols === 1 ? ' oneline' : '') + (mins >= 90 ? ' tall' : '')
       + (cols > 1 ? ' narrow' : '') + (cols > 2 ? ' tiny' : '') + (lay.depth ? ' nested' : '') + (lay.kids ? ' has-kids' : '');
     el.dataset.id = x.id;
+    const hasMap = !undecided(x) && !!effLoc(x), fw = (x.notes ? 22 : 0) + (undecided(x) ? 84 : hasMap ? 66 : 0);
+    if (fw) el.style.setProperty('--fw', fw + 8 + 'px');
     el.style.setProperty('--c', T.c); el.style.setProperty('--bg', T.bg);
     el.innerHTML = `<div class="ic">${icon(modeIcon(x) || typeKey)}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>
-      <div class="m">${x.flight ? flightMeta(x) : fmtTime(x.start) + (x.end ? ' – ' + fmtTime(x.end) : '')}</div>${cols > 1 ? '' : noteLines(x, mins)}</div>
+      <div class="m">${x.flight ? flightMeta(x) : fmtTime(x.start) + (x.end ? ' – ' + fmtTime(x.end) : '')}</div>${cols > 1 ? '' : noteLines(x, lay.room ?? mins)}</div>
       <div class="flags">${x.notes ? `<span title="Has notes">${icon('note')}</span>` : ''}${undecided(x) ? `<span class="optpill">${x.options.length} options</span>` : mapLink(effLoc(x), 'Map ↗', 'map')}</div>`;
     el.addEventListener('click', ev => { if (Date.now() < noClickUntil) return; if (!ev.target.closest('.map')) openView(x); });
     attachHold(el, x, s, e);

@@ -420,3 +420,9 @@ form input.warn{border-color:#e0a03a;background:#fff4df}
 .holdtip{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:40;display:flex;align-items:center;gap:10px;background:var(--ink,#24323a);color:#fff;border-radius:14px;padding:11px 12px 11px 14px;font-size:13px;line-height:1.35;box-shadow:0 8px 24px rgba(0,0,0,.2)}
 .holdtip span{flex:1}
 .holdtip button{border:0;background:#fff;color:var(--ink,#24323a);font-weight:700;font-size:13px;border-radius:99px;padding:7px 12px;cursor:pointer}
+/* Note icon and Map button always top right, so a card on top never covers them */
+.lane .item:not(.short) .flags{position:absolute;right:8px;top:8px;bottom:auto;margin:0}
+.lane .item:not(.short) .t,.lane .item:not(.short) .m{padding-right:var(--fw,0px)}
+.lane .item:not(.short) .nt{padding-right:0!important}
+.lane .item.has-kids:not(.short) .body{padding-right:0}
+.lane .item.narrow .t,.lane .item.narrow .m{padding-right:0}
