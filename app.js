@@ -1379,8 +1379,8 @@
     if (!forced && (Date.now() < snooze || !(ios || android))) return;
     const step = (n, html) => `<li><span class="n">${n}</span><span>${html}</span></li>`;
     let body;
-    if (inApp) body = `<div class="inapp"><p><b>You're viewing this inside another app.</b> To install, open it in ${ios ? 'Safari' : 'Chrome'} first.</p>
-        <ol class="insteps">${step(1, `Tap ${icon('dots')} or ${icon('share')} in this app's menu`)}${step(2, `Choose <b>Open in ${ios ? 'Safari' : 'Browser'}</b>`)}</ol>
+    if (inApp) body = `<div class="inapp"><p><b>You're viewing this inside another app.</b> To install, open it in your phone's browser first (Safari on iPhone, Chrome or Samsung Internet on Android).</p>
+        <ol class="insteps">${step(1, `Tap ${icon('dots')} or ${icon('share')} in this app's menu`)}${step(2, `Choose <b>Open in browser</b>${ios ? ' (or Open in Safari)' : ''}`)}</ol>
         <button type="button" class="btn primary wide" id="inCopy">Copy link</button></div>`;
     else if (ios) body = `<ol class="insteps">${step(1, `Tap <b>Share</b> ${icon('share')} ${/CriOS|FxiOS|EdgiOS/.test(ua) ? 'next to the address bar' : 'at the bottom of Safari'}`)}${step(2, `Scroll down and tap <b>Add to Home Screen</b> ${icon('addsq')}`)}${step(3, 'Tap <b>Add</b>')}</ol>`;
     else body = `<button type="button" class="btn primary wide" id="inInstall">Install</button>
@@ -1389,7 +1389,7 @@
     const ib = $('#inInstall');
     if (ib) { ib.style.display = installEvt ? '' : 'none'; $('#inManual').style.display = installEvt ? 'none' : ''; ib.onclick = async () => { if (!installEvt) return; installEvt.prompt(); const r = await installEvt.userChoice; installEvt = null; if (r.outcome === 'accepted') hide(); }; }
     const cp = $('#inCopy');
-    if (cp) cp.onclick = () => { const u = location.origin + location.pathname; try { navigator.clipboard.writeText(u); toast('Link copied. Paste it in ' + (ios ? 'Safari' : 'Chrome')); } catch (e) { toast(u); } };
+    if (cp) cp.onclick = () => { const u = location.origin + location.pathname; try { navigator.clipboard.writeText(u); toast('Link copied. Paste it in your browser'); } catch (e) { toast(u); } };
     $('#inLater').onclick = () => { try { localStorage.setItem('xkk-install-later', Date.now() + 7 * 864e5); } catch (e) {} hide(); };
     show('#installSheet');
     if (forced) history.replaceState(null, '', location.pathname + location.hash);
