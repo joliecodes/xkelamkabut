@@ -373,4 +373,6 @@ form input.warn{border-color:#e0a03a;background:#fff4df}
 .route.long .end{flex:1 1 0;max-width:42%}
 .route.long .mid{flex:none;padding:0 2px}
 .found.same{background:#eaf4ef;border-color:#cfe6d9}
-.linkbtn{display:block;margin-top:6px;border:0;background:none;padding:0;color:var(--sea);font-weight:600;font-size:14px;text-decoration:underline;cursor:pointer}
+.found .linkbtn{display:block;margin-top:6px;padding:0;text-decoration:underline}
+/* Notes inside taller itinerary blocks */
+.item .nt{margin-top:6px;font-size:13px;line-height:19px;color:var(--muted);display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}

@@ -131,7 +131,7 @@
     $('#kicker').textContent = onTrips ? 'xkelamkabut' : 'xkelamkabut · trip';
     if (onTrips) {
       $('#tripTitle').textContent = 'My trips';
-      $('#tripDates').textContent = `${db.trips.length} trip${db.trips.length === 1 ? '' : 's'} · tak kelam-kabut`;
+      $('#tripDates').textContent = `${db.trips.length} trip${db.trips.length === 1 ? '' : 's'}`;
       document.title = 'xkelamkabut';
       return;
     }
@@ -268,6 +268,21 @@
 
   // Transport blocks show what they are: plane, train, bus, ferry or car
   const modeIcon = x => x.type !== 'transport' ? '' : x.mode ? ({ flight: 'plane', car: 'car', train: 'train', bus: 'bus', ferry: 'ferry' })[x.mode] : x.flight ? 'plane' : '';
+  // Blocks with room for more than the title and time show the start of the notes
+  function noteLines(x, mins) {
+    if (!x.notes) return '';
+    const n = Math.floor((mins * HOUR_PX / 60 - 96) / 19);
+    return n >= 1 ? `<div class="nt" style="-webkit-line-clamp:${Math.min(n, 8)}">${esc(x.notes)}</div>` : '';
+  }
+  // Clock change from the two airports' time zones when known (fixes flights saved with a misread flight time)
+  function liveFlight(x) {
+    const f = x.flight, a = AIRPORT_TZ[(f.from || '').toUpperCase()], b = AIRPORT_TZ[(f.to || '').toUpperCase()];
+    if (a == null || b == null || !f.arrTime || !x.start) return f;
+    let wall = toMin(f.arrTime) - toMin(x.start);
+    if (f.arrDate || wall < 0) wall += 1440;
+    const shift = (b - a) * 60;
+    return { ...f, shift, dur: wall - shift };
+  }
   function itemEl(x, s, e) {
     const T = TYPES[x.type] || TYPES.other;
     const typeKey = TYPES[x.type] ? x.type : 'other';
@@ -277,7 +292,7 @@
     el.style.setProperty('--c', T.c); el.style.setProperty('--bg', T.bg);
     el.innerHTML = `<div class="ic">${icon(modeIcon(x) || typeKey)}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>
-      <div class="m">${x.flight ? flightMeta(x) : fmtTime(x.start) + (x.end ? ' – ' + fmtTime(x.end) : '')}</div></div>
+      <div class="m">${x.flight ? flightMeta(x) : fmtTime(x.start) + (x.end ? ' – ' + fmtTime(x.end) : '')}</div>${noteLines(x, mins)}</div>
       <div class="flags">${x.notes ? `<span title="Has notes">${icon('note')}</span>` : ''}${undecided(x) ? `<span class="optpill">${x.options.length} options</span>` : mapLink(effLoc(x), 'Map ↗', 'map')}</div>`;
     el.addEventListener('click', ev => { if (!ev.target.closest('.map')) openView(x); });
     return el;
@@ -285,7 +300,7 @@
 
   // "12:45 pm KUL – 1:35 pm PQC · 1h 50m · clocks go back 1 hr"
   function flightMeta(x) {
-    const f = x.flight, code = c => c ? ` <span class="tz">${esc(c)}</span>` : '';
+    const f = liveFlight(x), code = c => c ? ` <span class="tz">${esc(c)}</span>` : '';
     const arr = f.arrTime ? `${fmtTime(f.arrTime)}${code(f.to)}${f.arrDate ? ` <span class="tz">${esc(fmtDate(f.arrDate, { day: 'numeric', month: 'short' }))}</span>` : ''}` : '';
     return [`${fmtTime(x.start)}${code(f.from)}${arr ? ' – ' + arr : ''}`, f.dur != null && f.dur > 0 ? fmtDur(f.dur) : '', shiftText(f.shift)].filter(Boolean).join(' · ');
   }
@@ -302,7 +317,7 @@
     $('#vType').textContent = T.label;
     $('#vTitle').textContent = x.title;
     if (x.flight) {
-      const f = x.flight;
+      const f = liveFlight(x);
       const air = !x.mode || x.mode === 'flight', len = f.dur > 0 ? fmtDur(f.dur) + (air ? ' flight' : ' journey') : '';
       $('#vTime').innerHTML = `<b>Departs</b> ${fmtTime(x.start)}${f.from ? ` ${esc(f.from)} time` : ''}`
         + (f.arrTime ? `<br><b>${air ? 'Lands' : 'Arrives'}</b> ${fmtTime(f.arrTime)}${f.to ? ` ${esc(f.to)} time` : ''}${f.arrDate ? ', ' + esc(fmtDate(f.arrDate, { weekday: 'short', day: 'numeric', month: 'short' })) : ''}` : '')
@@ -729,7 +744,8 @@
   const AIRPORT_TZ = { KUL: 8, PEN: 8, LGK: 8, BKI: 8, KCH: 8, JHB: 8, SZB: 8, SIN: 8, HKG: 8, MFM: 8, TPE: 8, MNL: 8, CEB: 8, DPS: 8, PEK: 8, PVG: 8, CAN: 8, PER: 8,
     PQC: 7, SGN: 7, HAN: 7, DAD: 7, CXR: 7, BKK: 7, DMK: 7, HKT: 7, CNX: 7, USM: 7, KBV: 7, CGK: 7, PNH: 7, REP: 7, VTE: 7,
     RGN: 6.5, DAC: 6, DXB: 4, DWC: 4, MCT: 4, JED: 3, RUH: 3, NCE: 1, FCO: 1, MAD: 1, BCN: 1, MUC: 1, ZRH: 1, KTM: 5.75, DEL: 5.5, BOM: 5.5, CMB: 5.5, MLE: 5, DXB: 4, AUH: 4, DOH: 3, IST: 3, NRT: 9, HND: 9, KIX: 9, ICN: 9, GMP: 9, LHR: 0, CDG: 1, FRA: 1, AMS: 1, SYD: 11, MEL: 11, BNE: 10 };
-  const parseDur = s => { const m = (s || '').match(/(\d{1,2})\s*h\D*?(\d{1,2})?\s*m?/i); return m ? +m[1] * 60 + (+m[2] || 0) : null; };
+  // "1h 50m", "1hr 50min", "1 hour 50 minutes", "2h 07min"
+  const parseDur = s => { const m = (s || '').match(/(\d{1,2})\s*h(?:rs?|ours?)?\s*(?:(\d{1,2})\s*m)?/i); return m ? +m[1] * 60 + (+m[2] || 0) : null; };
   const fmtDur = m => `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}`;
   // From local departure/arrival times: real flight length and the clock change on landing
   function flightInfo(f) {
@@ -738,12 +754,13 @@
     const wall = toMin(f.arrTime) + dayGap * 1440 - toMin(f.depTime);
     let dur = parseDur(f.duration), shift = null;
     const a = AIRPORT_TZ[(f.from || '').toUpperCase()], b = AIRPORT_TZ[(f.to || '').toUpperCase()];
-    if (dur != null) shift = wall - dur;
-    else if (a != null && b != null) { shift = (b - a) * 60; dur = wall - shift; }
+    // Known time zones win: clocks move by whole time zones, not by a misread flight time
+    if (a != null && b != null) { shift = (b - a) * 60; dur = wall - shift; }
+    else if (dur != null) shift = wall - dur;
     if (shift != null) shift = Math.round(shift / 15) * 15;
     return { dur, shift };
   }
-  const shiftText = s => !s ? '' : `clocks go ${s < 0 ? 'back' : 'forward'} ${Math.abs(s) % 60 ? fmtDur(Math.abs(s)) : Math.abs(s) / 60 + ' hr'}`;
+  const shiftText = s => !s ? '' : `clocks go ${s < 0 ? 'back' : 'forward'} ${Math.abs(s) % 60 ? fmtDur(Math.abs(s)) : Math.abs(s) / 60 + 'h'}`;
 
   /* ---------- bookings ---------- */
   const BOOK_C = { c: '#5b7fa6', bg: '#ecf1f7' };
