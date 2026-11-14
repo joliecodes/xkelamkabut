@@ -1409,7 +1409,9 @@
   // A position from a pasted map link (Google, Waze, Apple). Short share links hide it.
   const SHORT_LINK = /(goo\.gl|maps\.app|g\.co\/|waze\.com\/ul\/h|bit\.ly)/i;
   function coordsFromLink(u) {
-    u = decodeURIComponent(u || '');
+    try { u = decodeURIComponent(u || ''); } catch (e) { u = u || ''; }
+    const plainC = u.match(/^\s*(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$/);   // "10.0285, 104.0255"
+    if (plainC) return { lat: +plainC[1], lon: +plainC[2] };
     const m = u.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || u.match(/[?&](?:q|ll|query|daddr|sll|destination)=(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/) || u.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
     return m ? { lat: +m[1], lon: +m[2] } : null;
   }
@@ -1423,7 +1425,7 @@
   }
   // Find a stay on the map: its map link first, else an address search that has to share a place name with the address
   async function locate(p) {
-    if (p.manual && p.lat != null) return p;
+    if (p.manual && p.lat != null) return p;   // added by search or with a full link
     const b = p.stay || p.src || p, key = `v2|${b.name || ''}|${b.address || ''}|${b.maps || ''}`;
     if (b.geo && b.geo.key === key) return { ...p, ...b.geo };
     const fromLink = coordsFromLink(b.maps);
@@ -1532,33 +1534,52 @@
       if (live()) draw(list, false);
     } catch (e) { if (live()) draw(null, false, 'busy'); }
   }
-  // One drawer for "Add place" (p = null) and "Wrong place?" (p = the place to fix): paste a map link
+  // One drawer for "Add place" (p = null) and "Wrong place?" (p = the place to fix),
+  // the same as an itinerary item's location: search a place, or paste a link instead
   let linkFor = null;
   function openHandyLink(p) {
     linkFor = p;
     $('#hlTitle').textContent = p ? `Where is ${p.name}?` : 'Add a place';
-    $('#hlSub').textContent = p ? 'Paste a map link for this place. It will be used from now on.' : 'Your Airbnb, a friend’s place, or anywhere you’ll be based.';
-    $('#hlNameRow').hidden = !!p;
+    $('#hlSub').textContent = p ? 'Search for it, or paste a map link. It will be used from now on.' : 'Your Airbnb, a friend’s place, or anywhere you’ll be based.';
+    $('#hlQ').value = p ? p.name : ''; $('#hlResults').innerHTML = '';
     $('#hlUrl').value = ''; $('#hlName').value = ''; $('#hlErr').hidden = true;
-    show('#handyAddDrawer'); setTimeout(() => $('#hlUrl').focus(), 250);
+    $('#hlForm').hidden = true; $('#hlSearch').hidden = false; $('#hlShowLink').hidden = false;
+    show('#handyAddDrawer');
+    if (p) searchPlaces($('#hlQ').value, $('#hlResults'), pickHandy); else setTimeout(() => $('#hlQ').focus(), 250);
   }
-  $('#hlForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    const url = normaliseUrl($('#hlUrl').value.trim()), name = $('#hlName').value.trim(), err = $('#hlErr');
-    if (!url) { err.textContent = 'Paste a map link first.'; err.hidden = false; return; }
-    const at = coordsFromLink(url);
+  let hlTimer;
+  $('#hlQ').addEventListener('input', () => { clearTimeout(hlTimer); hlTimer = setTimeout(() => searchPlaces($('#hlQ').value.trim(), $('#hlResults'), pickHandy), 350); });
+  $('#hlShowLink').onclick = () => { $('#hlForm').hidden = false; $('#hlShowLink').hidden = true; $('#hlNameRow').hidden = !!linkFor; setTimeout(() => $('#hlUrl').focus(), 50); };
+  // saving a place's position: on the stay (and its booking's map link) or on the added place
+  async function placeAt(at, url, name, label, cc) {
     if (linkFor) {
-      if (!at) { err.textContent = SHORT_LINK.test(url) ? 'This short link doesn’t include the location. In Google Maps, open the place and copy the link from the address bar instead.' : 'Couldn’t find a location in that link. Try a link copied from Google Maps, Waze or Apple Maps.'; err.hidden = false; return; }
       const target = linkFor.stay || linkFor.src;
-      target.maps = url; delete target.geo;
-      if (linkFor.manual) { target.lat = at.lat; target.lon = at.lon; target.cc = ''; delete target.cc; const r = await reverseCC(at); target.cc = r.cc || ''; }
+      target.maps = url || gmaps(at);
+      if (linkFor.manual) Object.assign(target, at, { cc: cc || '', address: target.address || label || '' });
+      else { const key = `v2|${target.name || ''}|${target.address || ''}|${target.maps}`; target.geo = { key, ...at, cc: cc || guessCC(`${target.address} ${target.name}`), label: label || '' }; }
       save(); hide(); renderHandy(); if (!linkFor.manual) renderBookings(); toast('Location saved');
       return;
     }
-    if (!at && !name) { err.textContent = 'This short link doesn’t include the location, so add a name for the place and it will be looked up.'; err.hidden = false; $('#hlName').focus(); return; }
-    const id = uid(), place = { id, name: name || 'My place', address: '', maps: url };
-    if (at) { const r = await reverseCC(at); Object.assign(place, at, { cc: r.cc || '', address: r.label || '' }); }
-    (trip.handy ||= []).push(place); handyCur = id; save(); hide(); renderHandy();
+    const id = uid();
+    (trip.handy ||= []).push({ id, name: name || 'My place', address: label || '', maps: url || '', ...(at || {}), cc: cc || '' });
+    handyCur = id; save(); hide(); renderHandy();
+  }
+  function pickHandy(pl) { placeAt({ lat: pl.lat, lon: pl.lon }, '', pl.name, pl.address, pl.cc); }
+  $('#hlForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const raw = $('#hlUrl').value.trim(), name = $('#hlName').value.trim(), err = $('#hlErr');
+    if (!raw) { err.textContent = 'Paste a map link first.'; err.hidden = false; return; }
+    const at = coordsFromLink(raw), url = /[a-z]/i.test(raw) ? normaliseUrl(raw) : '';   // plain coordinates have no link
+    if (at) { const r = await reverseCC(at); return placeAt(at, url || gmaps(at), name || r.label?.split(',')[0], r.label, r.cc); }
+    // a short share link: keep it for the Map button, find the place by its name
+    if (linkFor) {
+      const target = linkFor.stay || linkFor.src; target.maps = url; delete target.geo;
+      if (linkFor.manual) { delete target.lat; delete target.lon; }
+      save(); hide(); renderHandy(); if (!linkFor.manual) renderBookings(); toast('Link saved');
+      return;
+    }
+    if (!name) { err.textContent = 'Add a name for this place so it can be found on the map.'; err.hidden = false; $('#hlName').focus(); return; }
+    placeAt(null, url, name, '', '');
   });
 
   /* ---------- routing ---------- */

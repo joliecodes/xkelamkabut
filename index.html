@@ -121,9 +121,14 @@
   <div class="viewhead"><div class="vt"><div class="vtype">Handy</div><h3 id="hlTitle">Add a place</h3></div>
     <button type="button" class="round" data-close aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button></div>
   <p class="muted" id="hlSub" style="margin:0 0 12px"></p>
-  <form id="hlForm" novalidate>
-    <label>Map link<input id="hlUrl" type="url" inputmode="url" placeholder="Paste a map link" autocomplete="off"></label>
-    <label id="hlNameRow">Name <span class="muted">(optional)</span><input id="hlName" placeholder="e.g. Cauterets BNB" autocomplete="off"></label>
+  <div id="hlSearch">
+    <input id="hlQ" type="search" placeholder="Search a place, e.g. Sunday Boutique Phu Quoc" autocomplete="off" enterkeyhint="search">
+    <div class="results" id="hlResults"></div>
+  </div>
+  <button type="button" class="linkbtn" id="hlShowLink"><svg class="ico"><use href="#i-link"/></svg>Paste A Link Instead</button>
+  <form id="hlForm" novalidate hidden>
+    <label>Map link<input id="hlUrl" type="text" inputmode="url" placeholder="Location map link" autocomplete="off"></label>
+    <label id="hlNameRow">Name<input id="hlName" placeholder="e.g. Cauterets BNB" autocomplete="off"></label>
     <p class="err" id="hlErr" hidden></p>
     <button type="submit" class="btn primary wide">Save</button>
   </form>
