@@ -1415,7 +1415,12 @@
     if (direct || !url) return { at: direct, text: '' };
     let full = url;
     if (SHORT_LINK.test(url)) {
-      try { full = (await (await withTimeout(`${LINK_OPENER}?u=${encodeURIComponent(url)}`, 9000)).json()).url || url; } catch (e) { return { at: null, text: '' }; }
+      // your link opener opens the link and asks Google for the exact coordinates
+      try {
+        const r = await (await withTimeout(`${LINK_OPENER}?u=${encodeURIComponent(url)}`, 12000)).json();
+        if (r.lat != null) return { at: { lat: +r.lat, lon: +r.lon }, text: r.text || r.address || '' };
+        full = r.url || url;
+      } catch (e) { return { at: null, text: '' }; }
     }
     try { const u = new URL(full); if (/\/sorry\//.test(u.pathname) && u.searchParams.get('continue')) full = u.searchParams.get('continue'); } catch (e) {}
     const at = coordsFromLink(full);
@@ -1428,6 +1433,10 @@
     text = text.replace(/\+/g, ' ').trim();
     if (/^-?\d+\.\d+\s*,\s*-?\d+\.\d+$/.test(text)) text = '';
     return { at, text };
+  }
+  // exact coordinates for a typed or scanned address, from Google via the link opener
+  async function addressCoords(text) {
+    try { const r = await (await withTimeout(`${LINK_OPENER}?a=${encodeURIComponent(text)}`, 12000)).json(); return r.lat != null ? { lat: +r.lat, lon: +r.lon } : null; } catch (e) { return null; }
   }
   const withTimeout = (url, ms) => { const c = new AbortController(), t = setTimeout(() => c.abort(), ms); return fetch(url, { signal: c.signal }).finally(() => clearTimeout(t)); };
   const placeLabel = pr => [pr.district || pr.locality, pr.city || pr.county, pr.state, pr.country].filter((v, i, a) => v && a.indexOf(v) === i).join(', ');
@@ -1443,19 +1452,20 @@
   // null when nothing is known: then the app asks for a link.
   async function locate(p) {
     const b = p.stay || p.src || p;
-    const key = `v6|${b.name || ''}|${b.address || ''}|${b.maps || ''}|${b.lat ?? ''}`;
+    const key = `v7|${b.name || ''}|${b.address || ''}|${b.maps || ''}|${b.lat ?? ''}`;
     if (b.geo && b.geo.key === key) return b.geo;
-    let text = b.linkText || b.text || '', cc = '';
-    if (!text && b.maps) {
+    let text = b.linkText || b.text || '', cc = '', at = b.lat != null ? { lat: b.lat, lon: b.lon } : null;
+    if (b.maps && !at) {
       const l = await resolveLink(b.maps);
-      if (l.at) { const r = await reverseCC(l.at); text = [l.text, r.label].filter(Boolean).join(', '); cc = r.cc || ''; }
-      else text = l.text;
+      if (l.at) at = l.at;
+      if (!text && l.text) text = l.text;
       if (text) b.linkText = text;
     }
-    if (!text && b.lat != null) { const r = await reverseCC(b); text = r.label || `${b.lat}, ${b.lon}`; cc = r.cc || ''; }
     if (!text && b.address) text = [b.name, b.address].filter(Boolean).join(', ');
-    if (!text) return null;
-    b.geo = { key, text, cc: cc || b.cc || guessCC(`${text} ${b.address || ''}`) }; save();
+    if (!at && b.address) at = await addressCoords(b.address);
+    if (at && !text) { const r = await reverseCC(at); text = r.label || `${at.lat}, ${at.lon}`; cc = r.cc || ''; }
+    if (!text && !at) return null;
+    b.geo = { key, text, cc: cc || b.cc || guessCC(`${text} ${b.address || ''}`), ...(at || {}) }; save();
     return b.geo;
   }
   async function renderHandy() {
@@ -1482,13 +1492,21 @@
     // and copies the search word, so you paste it there and Google searches around the stay
     const b1 = p.stay || p.src || p;
     const placeUrl = info => b1.maps || (b1.lat != null ? gmaps(b1) : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(info.text)}`);
-    const tiles = info => `<div class="htiles">${HANDY_CATS.map(c => `<a class="htile" href="${esc(placeUrl(info))}" target="_blank" rel="noopener" data-word="${esc(c[3])}">${icon(c[2])}<span>${c[1]}</span></a>`).join('')}</div>
-      <p class="attr hnote">Opens ${esc(p.name)} in Google Maps and copies the word. Paste it into the search box there: Google searches around your stay.</p>`;
+    // With exact coordinates: one tap searches right around the stay (Apple Maps on iPhone, Google Maps elsewhere).
+    // Without: open the stay in Google Maps and copy the word to search there.
+    const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/i.test(ua) || (/Mac/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/i.test(ua);
+    const exactUrl = (word, at) => ios ? `https://maps.apple.com/?q=${encodeURIComponent(word)}&sll=${at.lat},${at.lon}&z=15`
+      : android ? `geo:${at.lat},${at.lon}?q=${encodeURIComponent(word)}` : `https://www.google.com/maps/search/${encodeURIComponent(word)}/@${at.lat},${at.lon},15z`;
+    const tiles = info => {
+      const at = info.lat != null ? info : null;
+      return `<div class="htiles">${HANDY_CATS.map(c => `<a class="htile" href="${esc(at ? exactUrl(c[3], at) : placeUrl(info))}" target="_blank" rel="noopener"${at ? '' : ` data-word="${esc(c[3])}"`}>${icon(c[2])}<span>${c[1]}</span></a>`).join('')}</div>
+      <p class="attr hnote">${at ? `Searches right around ${esc(p.name)}${ios ? ' in Apple Maps' : ''}.` : `Opens ${esc(p.name)} in Google Maps and copies the word. Paste it into the search box there.`}</p>`;
+    };
     const show_ = info => {
-      $('#handyNear').innerHTML = `<span>Opens: ${esc(info.text)}</span> · <button type="button" class="hlink" id="hWrong">Change</button>`;
+      $('#handyNear').innerHTML = `<span>${info.lat != null ? "Searching around" : "Opens"}: ${esc(info.text)}</span> · <button type="button" class="hlink" id="hWrong">Change</button>`;
       $('#hWrong').onclick = () => openHandyLink(p);
       box.innerHTML = sosHtml(info.cc) + tiles(info) + foot(); wire();
-      box.querySelectorAll('.htile').forEach(a => a.addEventListener('click', () => {
+      box.querySelectorAll('.htile[data-word]').forEach(a => a.addEventListener('click', () => {
         const w = a.dataset.word;
         try { navigator.clipboard?.writeText(w); } catch (e) {}
         toast(`“${w}” copied. Paste it into Google Maps search`);
