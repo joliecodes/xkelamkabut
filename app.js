@@ -289,6 +289,7 @@
     const mins = e - s;
     const el = document.createElement('div');
     el.className = 'item' + (mins <= 30 ? ' short' : '') + (mins >= 90 ? ' tall' : '');
+    el.dataset.id = x.id;
     el.style.setProperty('--c', T.c); el.style.setProperty('--bg', T.bg);
     el.innerHTML = `<div class="ic">${icon(modeIcon(x) || typeKey)}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>
@@ -448,12 +449,30 @@
       flagError(form.start); if (data.end) flagError(form.end);
       return;
     }
+    const added = editing ? null : { id: uid(), ...data };
     if (editing) Object.assign(editing, data);
-    else day.items.push({ id: uid(), ...data });
+    else day.items.push(added);
     save(); renderGrid();
-    if (editing) openView(editing); else hide();
+    if (editing) openView(editing); else { hide(); showAdded(added.id); }
     toast(editing ? 'Saved' : 'Added');
   });
+
+  // After adding: scroll the new block into view and make it glow for a moment
+  function showAdded(id) {
+    requestAnimationFrame(() => {
+      const el = $(`#grid .item[data-id="${id}"]`); if (!el) return;
+      const r = el.getBoundingClientRect(), head = $('#v-itinerary .sticky, .daysbar, #days')?.getBoundingClientRect().bottom || 0;
+      const room = innerHeight - 90 - head;   // between the sticky day bar and the bottom nav
+      const top = scrollY + r.top - head - Math.max(16, (room - Math.min(r.height, room)) / 2);
+      scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      el.classList.remove('just'); void el.offsetWidth; el.classList.add('just');
+      setTimeout(() => el.classList.remove('just'), 2600);
+    });
+  }
+  // End time: tapping an empty End starts it 30 min after Start; moving Start past End keeps End 30 min later
+  const plus30 = hm => { const m = Math.min(toMin(hm) + 30, 23 * 60 + 59); return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+  ['focus', 'pointerdown'].forEach(ev => form.end.addEventListener(ev, () => { if (!form.end.value && form.start.value) form.end.value = plus30(form.start.value); }));
+  form.start.addEventListener('change', () => { if (form.start.value && form.end.value && toMin(form.end.value) <= toMin(form.start.value)) form.end.value = plus30(form.start.value); });
 
   $('#delItem').onclick = e => {
     const b = e.currentTarget;

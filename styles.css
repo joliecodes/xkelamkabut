@@ -376,3 +376,6 @@ form input.warn{border-color:#e0a03a;background:#fff4df}
 .found .linkbtn{display:block;margin-top:6px;padding:0;text-decoration:underline}
 /* Notes inside taller itinerary blocks */
 .item .nt{margin-top:6px;font-size:13px;line-height:19px;color:var(--muted);display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
+/* A just-added item glows so you can see where it went */
+.item.just{animation:justAdded 2.4s ease-out}
+@keyframes justAdded{0%,30%{box-shadow:0 0 0 3px var(--c),0 6px 22px color-mix(in srgb,var(--c) 45%,transparent)}100%{box-shadow:0 0 0 0 transparent}}
