@@ -224,15 +224,19 @@
     });
     grid.appendChild(lane);
 
-    // side-by-side columns for overlapping items
-    layoutColumns(items).forEach(({ x, s, e, col, cols }) => {
-      const el = itemEl(x, s, e);
+    gridFrom = from;
+    // Shorter items sit on top of longer ones, shifted in; items that start together go side by side
+    layoutNested(items).forEach(({ x, s, e, col, cols, depth, kids }) => {
+      const el = itemEl(x, s, e, { cols, depth, kids });
+      const inset = depth * INDENT;
       el.style.top = `${y(s) + 1}px`;
       el.style.height = `${Math.max((e - s) / 60 * HOUR_PX - 3, 22)}px`;
-      el.style.left = `calc(${(col / cols) * 100}% + ${col ? 2 : 0}px)`;
-      el.style.width = `calc(${100 / cols}% - ${cols > 1 ? 2 : 0}px)`;
+      el.style.left = `calc(${inset}px + (100% - ${inset}px) * ${col / cols} + ${col ? 2 : 0}px)`;
+      el.style.width = `calc((100% - ${inset}px) / ${cols} - ${cols > 1 ? 2 : 0}px)`;
+      el.style.zIndex = 1 + depth * 2;
       lane.appendChild(el);
     });
+    maybeHoldTip(day);
 
     // current time line
     if (day.date === todayISO()) {
@@ -243,6 +247,120 @@
         grid.appendChild(now);
       }
     }
+  }
+
+  const INDENT = 26;
+  let gridFrom = 0;
+  // Depth: how many longer items an item sits on top of (it starts at least 30 min into them)
+  function layoutNested(items) {
+    const placed = [];
+    items.forEach(it => {
+      it.depth = 0; it.kids = false;
+      placed.forEach(p => { if (p.s <= it.s - 30 && p.e > it.s && p.depth + 1 > it.depth) it.depth = p.depth + 1; });
+      placed.forEach(p => { if (p.s <= it.s - 30 && p.e > it.s) p.kids = true; });
+      placed.push(it);
+    });
+    // within each depth, overlapping items share the width
+    const out = [];
+    [...new Set(items.map(i => i.depth))].forEach(d => out.push(...layoutColumns(items.filter(i => i.depth === d))));
+    return out;
+  }
+  /* ---------- hold a block: lift it, drag to move, or let go for quick actions ---------- */
+  let noClickUntil = 0;
+  const HOLD_MS = 450;
+  function attachHold(el, x, s, e) {
+    let timer = null, lifted = false, dragging = false, sx = 0, sy = 0, sScroll = 0, ns = s, ghost = null, line = null, raf = 0, lastY = 0;
+    const dur = e - s, linked = !!x.bookingId;
+    const lane = () => el.parentElement;
+    const yOf = m => (m - gridFrom * 60) / 60 * HOUR_PX;
+    const minAt = clientY => { const r = lane().getBoundingClientRect(); return gridFrom * 60 + (clientY - r.top) / HOUR_PX * 60; };
+    const reset = () => {
+      clearTimeout(timer); timer = null; cancelAnimationFrame(raf);
+      el.classList.remove('lifted', 'dragging'); $('#grid').classList.remove('holding');
+      ghost?.remove(); line?.remove(); ghost = line = null; lifted = dragging = false;
+    };
+    const showLine = clientY => {
+      const m = Math.max(0, Math.min(23 * 60 + 30, Math.floor(minAt(clientY) / 30) * 30));
+      if (!line) { line = document.createElement('div'); line.className = 'pressline'; lane().appendChild(line); }
+      line.style.top = `${yOf(m)}px`; line.innerHTML = `<span>${fmtTime(fromMin(m))}</span>`; line.dataset.m = m;
+    };
+    el.addEventListener('pointerdown', ev => {
+      if (ev.button > 0 || ev.target.closest('.map')) return;
+      sx = ev.clientX; sy = lastY = ev.clientY; sScroll = scrollY;
+      timer = setTimeout(() => {
+        lifted = true; navigator.vibrate?.(12);
+        el.classList.add('lifted'); $('#grid').classList.add('holding');
+        ghost = document.createElement('div'); ghost.className = 'ghost';
+        Object.assign(ghost.style, { top: el.style.top, height: el.style.height, left: el.style.left, width: el.style.width });
+        lane().insertBefore(ghost, el);
+        showLine(sy);
+        try { el.setPointerCapture(ev.pointerId); } catch (_) {}
+      }, HOLD_MS);
+    });
+    // after the hold, the page must not scroll under your finger
+    el.addEventListener('touchmove', ev => { if (lifted) ev.preventDefault(); }, { passive: false });
+    el.addEventListener('contextmenu', ev => ev.preventDefault());
+    el.addEventListener('pointermove', ev => {
+      lastY = ev.clientY;
+      if (!lifted) { if (timer && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 8) { clearTimeout(timer); timer = null; } return; }
+      if (!dragging && Math.abs(ev.clientY - sy) > 6) {
+        if (linked) { toast('Move this one in Bookings'); reset(); noClickUntil = Date.now() + 400; return; }
+        dragging = true; line?.remove(); line = null; el.classList.add('dragging');
+        const tick = () => {   // scroll the page when dragging near the top or bottom
+          const edge = lastY < 170 ? -8 : lastY > innerHeight - 110 ? 8 : 0;
+          if (edge) { scrollBy(0, edge); move(); }
+          raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+      }
+      if (dragging) move();
+    });
+    const move = () => {
+      const dy = lastY - sy + (scrollY - sScroll);
+      ns = Math.max(0, Math.min(1440 - dur, Math.round((s + dy / HOUR_PX * 60) / 15) * 15));
+      el.style.top = `${yOf(ns) + 1}px`;
+      el.querySelector('.m').textContent = fmtTime(fromMin(ns)) + (x.end ? ' – ' + fmtTime(fromMin(ns + dur)) : '');
+    };
+    const end = ev => {
+      if (!timer && !lifted) return;
+      const wasLifted = lifted, wasDragging = dragging, at = line ? +line.dataset.m : null;
+      if (wasLifted) noClickUntil = Date.now() + 400;
+      reset();
+      if (!wasLifted || ev.type === 'pointercancel') return;
+      localStorage.setItem('xkk-tip-hold', '1'); $('#holdTip')?.remove();
+      if (wasDragging) {
+        if (ns !== s) { x.start = fromMin(ns); if (x.end) x.end = fromMin(ns + dur); save(); }
+        renderGrid();
+        const moved = $(`#grid .item[data-id="${x.id}"]`); moved?.classList.add('settle');
+        return;
+      }
+      openItemMenu(x, at ?? s);
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+  }
+  function openItemMenu(x, at) {
+    const m = $('#itemMenu');
+    $('#imTitle').textContent = x.title;
+    $('#imAdd').innerHTML = `${icon('plus')}Add item at ${fmtTime(fromMin(at))}`;
+    $('#imAdd').onclick = () => { hide(); setTimeout(() => openDrawer(null, fromMin(at)), 180); };
+    $('#imEdit').innerHTML = `${icon('edit')}Edit ${esc(x.title)}`;
+    $('#imEdit').onclick = () => { hide(); setTimeout(() => openDrawer(x), 180); };
+    const del = $('#imDel'); del.dataset.armed = ''; del.innerHTML = `${icon('x')}Delete`;
+    del.onclick = () => {
+      if (!del.dataset.armed) { del.dataset.armed = '1'; del.innerHTML = `${icon('x')}Tap again to delete`; return; }
+      const day = trip.days[cur]; day.items = day.items.filter(i => i !== x);
+      save(); hide(); renderGrid(); toast('Deleted');
+    };
+    show('#itemMenu');
+  }
+  // One-time tip so people know holding a block does something
+  function maybeHoldTip(day) {
+    if (!day.items.length || localStorage.getItem('xkk-tip-hold') || $('#holdTip')) return;
+    const t = document.createElement('div'); t.id = 'holdTip'; t.className = 'holdtip';
+    t.innerHTML = `<span><b>Tip:</b> hold a block to add over it, edit, delete or drag it.</span><button type="button">Got it</button>`;
+    t.querySelector('button').onclick = () => { localStorage.setItem('xkk-tip-hold', '1'); t.remove(); };
+    document.body.appendChild(t);
   }
 
   // Group overlapping items into clusters, then give each a column
@@ -270,8 +388,9 @@
   const modeIcon = x => x.type !== 'transport' ? '' : x.mode ? ({ flight: 'plane', car: 'car', train: 'train', bus: 'bus', ferry: 'ferry' })[x.mode] : x.flight ? 'plane' : '';
   // Blocks with room for more than the title and time show the start of the notes
   function noteLines(x, mins) {
-    if (!x.notes) return '';
-    const n = Math.floor((mins * HOUR_PX / 60 - 96) / 19);
+    if (!x.notes || mins <= 30) return '';
+    if (mins < 60) return `<div class="nt" style="-webkit-line-clamp:1">${esc(x.notes)}</div>`;
+    const n = Math.floor((mins * HOUR_PX / 60 - 66) / 19);
     return n >= 1 ? `<div class="nt" style="-webkit-line-clamp:${Math.min(n, 8)}">${esc(x.notes)}</div>` : '';
   }
   // Clock change from the two airports' time zones when known (fixes flights saved with a misread flight time)
@@ -283,19 +402,22 @@
     const shift = (b - a) * 60;
     return { ...f, shift, dur: wall - shift };
   }
-  function itemEl(x, s, e) {
+  function itemEl(x, s, e, lay = {}) {
     const T = TYPES[x.type] || TYPES.other;
     const typeKey = TYPES[x.type] ? x.type : 'other';
-    const mins = e - s;
+    const mins = e - s, cols = lay.cols || 1;
     const el = document.createElement('div');
-    el.className = 'item' + (mins <= 30 ? ' short' : '') + (mins >= 90 ? ' tall' : '');
+    // 31–59 min with notes: title and time on one row so a line of notes fits under them
+    el.className = 'item' + (mins <= 30 || (mins < 60 && x.notes && cols === 1) ? ' short' : '') + (mins <= 30 ? '' : mins < 60 && x.notes && cols === 1 ? ' oneline' : '') + (mins >= 90 ? ' tall' : '')
+      + (cols > 1 ? ' narrow' : '') + (cols > 2 ? ' tiny' : '') + (lay.depth ? ' nested' : '') + (lay.kids ? ' has-kids' : '');
     el.dataset.id = x.id;
     el.style.setProperty('--c', T.c); el.style.setProperty('--bg', T.bg);
     el.innerHTML = `<div class="ic">${icon(modeIcon(x) || typeKey)}</div>
       <div class="body"><div class="t">${esc(x.title)}</div>
-      <div class="m">${x.flight ? flightMeta(x) : fmtTime(x.start) + (x.end ? ' – ' + fmtTime(x.end) : '')}</div>${noteLines(x, mins)}</div>
+      <div class="m">${x.flight ? flightMeta(x) : fmtTime(x.start) + (x.end ? ' – ' + fmtTime(x.end) : '')}</div>${cols > 1 ? '' : noteLines(x, mins)}</div>
       <div class="flags">${x.notes ? `<span title="Has notes">${icon('note')}</span>` : ''}${undecided(x) ? `<span class="optpill">${x.options.length} options</span>` : mapLink(effLoc(x), 'Map ↗', 'map')}</div>`;
-    el.addEventListener('click', ev => { if (!ev.target.closest('.map')) openView(x); });
+    el.addEventListener('click', ev => { if (Date.now() < noClickUntil) return; if (!ev.target.closest('.map')) openView(x); });
+    attachHold(el, x, s, e);
     return el;
   }
 
@@ -332,6 +454,8 @@
     renderViewOptions(x);
     $('#vLinks').innerHTML = mapLink(loc, 'Open in Maps ↗', 'btn primary');
     $('#vLinks').hidden = !$('#vLinks').innerHTML;
+    $('#vAddDuring').innerHTML = `${icon('plus')}Add an item during ${esc(x.title)}`;
+    $('#vAddDuring').onclick = () => { hide(); setTimeout(() => openDrawer(null, x.start), 180); };
     show('#viewDrawer');
   }
   $('#vEdit').onclick = () => openDrawer(viewing);
@@ -442,13 +566,7 @@
     }
     if (!data.title) { flagError(form.title); form.title.focus(); toast('Add a title'); return; }
     if (!data.start) { flagError(form.start); return; }
-    const clash = findOverlap(day, data, editing);
-    if (clash) {
-      $('#timeErr').textContent = `Overlaps with ${clash.title} (${fmtTime(clash.start)}${clash.end ? ' – ' + fmtTime(clash.end) : ''}). Pick another time.`;
-      $('#timeErr').hidden = false;
-      flagError(form.start); if (data.end) flagError(form.end);
-      return;
-    }
+    if (data.end && toMin(data.end) <= toMin(data.start)) { $('#timeErr').textContent = 'End is before Start.'; $('#timeErr').hidden = false; flagError(form.end); return; }
     const added = editing ? null : { id: uid(), ...data };
     if (editing) Object.assign(editing, data);
     else day.items.push(added);
@@ -1241,7 +1359,7 @@
     if (v === 'packing') renderPacking();
     if (v === 'bookings') renderBookings();
     if (v === 'itinerary' && lastView !== 'itinerary') { renderDays(); renderGrid(); requestAnimationFrame(scrollToStart); }
-    if (v !== 'itinerary') scrollTo(0, 0);
+    if (v !== 'itinerary') { scrollTo(0, 0); $('#holdTip')?.remove(); }
     lastView = v;
   }
   addEventListener('hashchange', route);

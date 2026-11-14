@@ -192,6 +192,20 @@
     <div class="pills" id="vOtherPills"></div>
     <button type="button" class="linkbtn" id="vChange">Change pick</button>
   </details>
+  <button type="button" class="linkbtn vduring" id="vAddDuring"></button>
+  <p class="vhint">Hold a block in the itinerary for quick actions.</p>
+</div>
+
+<!-- Hold a block: quick actions -->
+<div class="drawer" id="itemMenu" role="dialog" aria-modal="true">
+  <div class="grab"></div>
+  <div class="viewhead"><div class="vt"><div class="vtype">Quick actions</div><h3 id="imTitle"></h3></div>
+    <button type="button" class="round" data-close aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button></div>
+  <div class="imenu">
+    <button type="button" id="imAdd"></button>
+    <button type="button" id="imEdit"></button>
+    <button type="button" id="imDel" class="danger"></button>
+  </div>
 </div>
 
 <!-- Which maps app? (asked once) -->

@@ -379,3 +379,44 @@ form input.warn{border-color:#e0a03a;background:#fff4df}
 /* A just-added item glows so you can see where it went */
 .item.just{animation:justAdded 2.4s ease-out}
 @keyframes justAdded{0%,30%{box-shadow:0 0 0 3px var(--c),0 6px 22px color-mix(in srgb,var(--c) 45%,transparent)}100%{box-shadow:0 0 0 0 transparent}}
+/* Space above "Add A Link As An Option" */
+#optLinkBtn{margin-top:14px}
+/* Overlaps: shorter items on top of longer ones, shifted in */
+.lane .item.nested{box-shadow:0 0 0 2px #fff,0 3px 10px rgba(36,50,58,.14)}
+.lane .item.has-kids:not(.short) .flags{top:8px;bottom:auto}
+.lane .item.has-kids:not(.short) .body{padding-right:64px}
+/* Side by side: type icon first, then the title; the rest is in the info drawer */
+.lane .item.narrow{padding:6px 7px;gap:6px}
+.lane .item.narrow .flags,.lane .item.narrow .nt{display:none}
+.lane .item.narrow .t{font-size:14px;line-height:1.25;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:normal}
+.lane .item.narrow.short .t{-webkit-line-clamp:1;white-space:nowrap;display:block;text-overflow:ellipsis}
+.lane .item.narrow .m{font-size:11px}
+.lane .item.tiny{flex-direction:column;align-items:flex-start}
+.lane .item.tiny .m{display:none}
+.lane .item.oneline{align-items:flex-start;padding-top:6px}
+.lane .item.oneline .body{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:6px;align-items:baseline}
+.lane .item.oneline .m{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lane .item.oneline .nt{grid-column:1/-1;margin-top:2px}
+.lane .item:not(.short):not(.tall):not(.has-kids) .nt{padding-right:72px}
+.lane .item.oneline .flags{align-self:flex-start;margin-top:0}
+/* Hold and drag */
+.lane .item{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;transition:transform .18s,box-shadow .18s,opacity .18s}
+.grid.holding .lane .item:not(.lifted){opacity:.55}
+.grid.holding .lane .item.nested:not(.lifted){opacity:.9}
+.lane .item.dragging{z-index:50!important}
+.lane .item.lifted{transform:scale(1.03);box-shadow:0 14px 34px rgba(36,50,58,.28),0 0 0 2px var(--c);transition:transform .18s,box-shadow .18s}
+.lane .ghost{position:absolute;border:2px dashed color-mix(in srgb,var(--ink,#24323a) 25%,transparent);border-radius:10px;pointer-events:none}
+.lane .pressline{position:absolute;left:-6px;right:0;height:0;border-top:2px solid var(--coral,#e07a5f);z-index:60;pointer-events:none}
+.lane .pressline span{position:absolute;right:0;top:-24px;background:var(--coral,#e07a5f);color:#fff;font-size:12px;font-weight:700;padding:3px 8px;border-radius:99px}
+.lane .item.settle{animation:settle .35s ease-out}
+@keyframes settle{0%{transform:scale(1.03)}100%{transform:scale(1)}}
+/* Quick actions */
+.imenu{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.imenu button{display:flex;align-items:center;gap:12px;border:0;background:#f4f2ed;border-radius:14px;padding:15px 16px;font-size:16px;font-weight:600;color:var(--ink);cursor:pointer;text-align:left}
+.imenu button .ico{width:19px;height:19px;color:var(--sea)}
+.imenu button.danger{color:#c4453a}.imenu button.danger .ico{color:#c4453a}
+.vduring{margin-top:14px}
+.vhint{font-size:12px;color:var(--muted);margin:2px 0 0}
+.holdtip{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:40;display:flex;align-items:center;gap:10px;background:var(--ink,#24323a);color:#fff;border-radius:14px;padding:11px 12px 11px 14px;font-size:13px;line-height:1.35;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.holdtip span{flex:1}
+.holdtip button{border:0;background:#fff;color:var(--ink,#24323a);font-weight:700;font-size:13px;border-radius:99px;padding:7px 12px;cursor:pointer}
