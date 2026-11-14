@@ -270,7 +270,8 @@
   const HOLD_MS = 450;
   function attachHold(el, x, s, e) {
     let timer = null, lifted = false, dragging = false, sx = 0, sy = 0, sScroll = 0, ns = s, ghost = null, line = null, raf = 0, lastY = 0;
-    const dur = e - s, linked = !!x.bookingId;
+    // tickets (flights, trains, buses, ferries) are fixed; check-in/out and car hire can move
+    const dur = e - s, linked = !!x.bookingId && x.type === 'transport' && x.mode !== 'car';
     const lane = () => el.parentElement;
     const yOf = m => (m - gridFrom * 60) / 60 * HOUR_PX;
     const minAt = clientY => { const r = lane().getBoundingClientRect(); return gridFrom * 60 + (clientY - r.top) / HOUR_PX * 60; };
@@ -1117,6 +1118,12 @@
   // Show one booking found in a file: as an update if it's already saved, otherwise as new
   function showFound(item) {
     bCur = item; bKind = item.kind; bPrefillExtra = item.data;
+    // "Hotel Mistral" from a screenshot takes the spelling you already have ("Hôtel Mistral")
+    if (item.kind === 'stay' && item.data.name) {
+      const p = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      const known = trip.bookings.find(b => b.kind === 'stay' && b.name && p(b.name) === p(item.data.name));
+      if (known) item.data.name = known.name;
+    }
     const match = trip.bookings.find(b => b.kind === item.kind && sameTrip(item.kind, b, item.data));
     bEditing = match || null; bMatched = !!match;
     if (!match) return bStep2(item.data, true);
@@ -1179,13 +1186,12 @@
       const day = trip.days.find(d => d.date === date);
       if (!day) { skipped.push(`${label} (no day for ${shortDate(date)})`); return; }
       const it = { id: uid(), end: '', maps: '', notes: '', options: [], decided: null, place: null, bookingId: b.id, start, ...item };
+      // Overlaps are fine; only check-in waits until after you've landed or arrived (up to 3 hours later)
       let clash = findOverlap(day, it, null);
-      // Check-in is flexible: slide it to the next free half hour (up to 3 hours later)
-      for (let k = 0; clash && label === 'check-in' && k < 6; k++) {
+      for (let k = 0; clash && clash.type === 'transport' && label === 'check-in' && k < 6; k++) {
         const m = Math.ceil((toMin(it.start) + 1) / 30) * 30; if (m >= 24 * 60) break;
         it.start = fromMin(m); clash = findOverlap(day, it, null);
       }
-      if (clash) { skipped.push(`${label} (overlaps ${clash.title})`); return; }
       day.items.push(it); b.itemIds.push(it.id);
     };
     const gq = q => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
@@ -1385,9 +1391,17 @@
   const fmtDist = m => m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`;
   const walk = m => `${Math.max(1, Math.round(m / 80))} min walk`;
   let handyCur = null;
+  const plain = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   // The places to look around: stays in Bookings, then any added by hand
   function handyPlaces() {
-    const stays = trip.bookings.filter(b => b.kind === 'stay' && (b.name || b.address)).map(b => ({ id: b.id, name: b.name || b.address, address: b.address || '', stay: b }));
+    // the same hotel twice (two stays, or "Hôtel" vs "Hotel") shows once, keeping the accented spelling
+    const stays = [];
+    trip.bookings.filter(b => b.kind === 'stay' && (b.name || b.address)).forEach(b => {
+      const p = { id: b.id, name: b.name || b.address, address: b.address || '', stay: b };
+      const same = stays.find(q => (b.name && plain(q.name) === plain(b.name)) || (b.address && plain(q.address) === plain(b.address)));
+      if (!same) return stays.push(p);
+      if (/[^\x00-\x7f]/.test(p.name) && !/[^\x00-\x7f]/.test(same.name)) same.name = p.name;
+    });
     return [...stays, ...(trip.handy || []).map(p => ({ ...p, manual: true }))];
   }
   async function locate(p) {
