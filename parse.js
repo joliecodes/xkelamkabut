@@ -234,6 +234,8 @@
     const br = block.match(/\(([^()]*[A-Za-z][^()]*)\)/);
     let name = clean(br ? br[1] : block.split(/\s{3,}|\n/)[0]);
     const addrIdx = lines.findIndex(l => ADDRESS_LINE.test(l.replace(/^[^\w]+/, '')) && !/^\s*address\s*:/i.test(l));
+    // a hotel-like name in the first few lines ("Hôtel Mistral" at the top of a card)
+    if (!name) { const top = lines.slice(0, 4).map(l => clean(l.split(/\s{3,}/)[0].replace(/[^\p{L}\d)]+$/u, ''))).find(l => /\b(h[oô]tel|resort|inn|hostel|villa|suites?|boutique|lodge|guesthouse)\b/i.test(l) && !NOT_NAME.test(l) && l.length < 60); if (top) name = top; }
     if (!name && addrIdx > 0) {
       for (let j = addrIdx - 1; j >= Math.max(0, addrIdx - 3); j--) { const l = clean(lines[j].replace(/^[^\p{L}\d]+/u, '')); if (l && !NOT_NAME.test(l) && l.length < 60) { name = l; break; } }
     }
@@ -245,7 +247,7 @@
     let phone = clean((src.match(/(?:contact\s*number|phone|tel(?:ephone)?)\s*:?\s*(\+?\d[\d\s()-]{6,}\d)/i) || [])[1]);
     if (!phone && addrIdx >= 0) phone = clean((lines.slice(addrIdx + 1, addrIdx + 4).find(l => /^[^\w+]*\+?\d[\d\s().-]{7,}\d$/.test(l)) || '').replace(/^[^\d+]+/, ''));
     phone = fixPlus(phone);
-    const ref = (text.match(/\b(?:booking\s*id|confirmation\s*(?:no|number|code)|reservation\s*(?:no|number|code)|booking\s*(?:no|number|reference))\.?\s*[:#]?\s*([A-Z0-9-]{5,})/i) || [])[1]
+    const ref = (text.match(/\b(?:booking\s*id|confirmation\s*(?:no|number|code)|reservation\s*(?:no|number|code)|booking\s*(?:no|number|reference))\.?\s*[:#]?\s*((?=[A-Z-]*\d)[A-Z0-9-]{5,})/i) || [])[1]
       || (text.match(/\b(?:booking|reservation|confirmation)\s*#\s*([A-Z0-9]{5,12})\b/i) || [])[1] || bookingRef(text);
     const grab = re => { const m = text.match(re); return m ? parseDate(m[1], year) : ''; };
     let inDate = grab(new RegExp(`(?:arrival|check[- ]?in)(?:\\s*date)?\\s*:?\\s*(?:[A-Za-z]{3,9},?\\s*)?${DATE_RE.source}`, 'i'));
@@ -253,7 +255,7 @@
     let inTime = time24((text.match(/check[- ]?in[^\n]{0,30}?(\d{1,2}:\d{2}\s*(?:am|pm)?)/i) || [])[1]);
     let outTime = time24((text.match(/check[- ]?out[^\n]{0,30}?(\d{1,2}:\d{2}\s*(?:am|pm)?)/i) || [])[1]);
     // "Jan 28, 2027 (from 14:00) → Jan 30, 2027 (to 12:00)"
-    const range = text.match(new RegExp(`${DATE_RE.source}\\s*(?:\\((?:from|after)\\s*(\\d{1,2}:\\d{2})\\))?\\s*(?:→|->|–|—|until)\\s*${DATE_RE.source}\\s*(?:\\((?:to|until|before|by)\\s*(\\d{1,2}:\\d{2})\\))?`, 'i'));
+    const range = text.match(new RegExp(`${DATE_RE.source}\\s*(?:\\((?:from|after)\\s*(\\d{1,2}:\\d{2})\\))?\\s*(?:→|->|–|—|until)\\s*(?:[A-Za-z]{3,9},?\\s+)?${DATE_RE.source}\\s*(?:\\((?:to|until|before|by)\\s*(\\d{1,2}:\\d{2})\\))?`, 'i'));
     if (range) {
       const g = range.slice(1).filter(v => v !== undefined);
       const ds = [...range[0].matchAll(new RegExp(DATE_RE.source, 'gi'))].map(m => parseDate(m[1], year));
@@ -418,7 +420,20 @@
       : [];
     return r;
   }
+  // Two labels side by side with their values on the line below become "Label: value" lines
+  const LABELISH = /\b(number|phone|address|reference|ref|code|date|time|name|confirmation|booking|check|pin|guests?|room)\b/i;
+  function pairLabels(t) {
+    const L = t.split('\n');
+    for (let i = 0; i < L.length - 1; i++) {
+      const a = L[i].split(/\s{3,}/).map(x => x.trim().replace(/^(?:[^\p{L}\s]{1,3}|\d{1,2})\s+(?=\p{L})/u, '')), b = L[i + 1].split(/\s{3,}/).map(x => x.trim());
+      if (a.length >= 2 && a.length === b.length && a.every(x => LABELISH.test(x) && !/\d/.test(x) && x.length <= 30) && b.every(x => x && !LABELISH.test(x))) {
+        L.splice(i, 2, ...a.map((x, k) => `${x}: ${b[k]}`)); i += a.length - 1;
+      }
+    }
+    return L.join('\n');
+  }
   function parseOne({ text, cols }) {
+    text = pairLabels(text); if (cols) cols = pairLabels(cols);
     const kind = detectKind(text);
     if (kind === 'car') return { kind, car: parseCar(text) };
     if (MODE_WORD[kind]) return { kind, legs: parseGround(text, kind) };

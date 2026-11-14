@@ -459,3 +459,7 @@ form input.warn{border-color:#e0a03a;background:#fff4df}
 .hfoot{padding:4px 4px 20px}
 .hfoot .attr{font-size:11.5px;color:var(--muted);margin-top:8px}
 .tabs a{font-size:10px}
+.fab{position:fixed;right:18px;bottom:calc(86px + env(safe-area-inset-bottom));z-index:6;width:58px;height:58px;border-radius:50%;border:0;background:var(--sea);color:#fff;display:grid;place-items:center;box-shadow:0 8px 22px rgba(42,140,149,.4);cursor:pointer}
+.fab .ico{width:26px;height:26px;stroke-width:2.4}
+.fab[hidden]{display:none}
+#v-bookings{padding-bottom:90px}

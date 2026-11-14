@@ -1,0 +1,19 @@
+{
+ "text": "Hotel Mistral   |\nSat 13 Feb — Mon 15 Feb\nCheck-in starts at 2:00 pm\nSat 13 Feb\nCheck out before 12:00 pm\n°   Mon 15 Feb\n® Address\n24 rue Cels, 75014 Paris\n55 Confirmation number   Phone\nZQ7RT2   0100000000\n",
+ "cols": "Hotel Mistral\nSat 13 Feb — Mon 15 Feb\nCheck-in starts at 2:00 pm\nSat 13 Feb\nCheck out before 12:00 pm\n°   Mon 15 Feb\n® Address\n24 rue Cels, 75014 Paris\n55 Confirmation number\nZQ7RT2\n\n|\nPhone\n0100000000\n",
+ "expected": {
+  "kind": "stay",
+  "stay": {
+   "name": "Hotel Mistral",
+   "address": "24 rue Cels, 75014 Paris",
+   "phone": "0100000000",
+   "ref": "ZQ7RT2",
+   "inDate": "2027-02-13",
+   "inTime": "14:00",
+   "outDate": "2027-02-15",
+   "outTime": "12:00",
+   "room": "",
+   "notes": ""
+  }
+ }
+}

@@ -1347,6 +1347,9 @@
     } finally { btn.classList.remove('busy'); label.textContent = was; }
   });
 
+  // Floating + on Bookings: same as the Add booking button at the top
+  $('#bookFab').onclick = () => $('#addBooking').click();
+
   /* ---------- Handy: useful places near each place you stay ---------- */
   // Map data © OpenStreetMap contributors, via Overpass (nearby places) and Photon (finding the hotel)
   const HANDY_CATS = [
@@ -1484,6 +1487,7 @@
     if (v === 'trips') renderTrips();
     if (v === 'packing') renderPacking();
     if (v === 'bookings') renderBookings();
+    $('#bookFab').hidden = v !== 'bookings';
     if (v === 'handy') renderHandy();
     if (v === 'itinerary' && lastView !== 'itinerary') { renderDays(); renderGrid(); requestAnimationFrame(scrollToStart); }
     if (v !== 'itinerary') { scrollTo(0, 0); $('#holdTip')?.remove(); }
