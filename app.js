@@ -666,7 +666,7 @@
     const all = trip.days.flatMap(d => d.items).map(i => i.place).filter(Boolean);
     return all.at(-1) || null;
   }
-  async function searchPlaces(q, out = $('#placeResults'), onPick = p => { setPlace(p); $('#placeQ').value = ''; if (!form.title.value) form.title.value = p.name; }) {
+  async function searchPlaces(q, out = $('#placeResults'), onPick = p => { setPlace(p); $('#placeQ').value = ''; if (!form.title.value) form.title.value = p.name; }, opts = {}) {
     if (q.length < 3) { out.innerHTML = ''; return; }
     searchCtl?.abort(); searchCtl = new AbortController();
     const b = biasPoint();
@@ -675,13 +675,18 @@
     try {
       const res = await fetch(url, { signal: searchCtl.signal });
       const data = await res.json();
-      const list = (data.features || []).map(f => {
+      let list = (data.features || []).map(f => {
         const pr = f.properties || {}, [lon, lat] = f.geometry.coordinates;
         const name = pr.name || [pr.housenumber, pr.street].filter(Boolean).join(' ') || pr.city || 'Unnamed place';
         const address = [[pr.housenumber, pr.street].filter(Boolean).join(' '), pr.district || pr.locality, pr.city, pr.state, pr.country]
           .filter((v, i, a) => v && v !== name && a.indexOf(v) === i).join(', ');
         return { name, address, lat: +lat.toFixed(6), lon: +lon.toFixed(6), cc: (pr.countrycode || '').toLowerCase() };
       });
+      // Handy: only places in the stay's country, so a same-name place abroad can't be picked by mistake
+      if (opts.cc) {
+        const all = list.length; list = list.filter(p => !p.cc || p.cc === opts.cc);
+        if (all && !list.length) { out.innerHTML = `<div class="pr muted">Not found in ${esc(opts.country || 'that country')}. Paste A Link Instead below.</div>`; return; }
+      }
       out.innerHTML = list.length ? '' : '<div class="pr muted">No matches. Try another spelling, or paste a link below.</div>';
       list.forEach(p => {
         const b = document.createElement('button');
@@ -1415,6 +1420,16 @@
     const m = u.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || u.match(/[?&](?:q|ll|query|daddr|sll|destination)=(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/) || u.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
     return m ? { lat: +m[1], lon: +m[2] } : null;
   }
+  // Short share links (maps.app.goo.gl/…) are opened by your own small Cloudflare worker to find the coordinates
+  const LINK_OPENER = 'https://xkk-links.joliecodes.workers.dev/';
+  async function linkCoords(url) {
+    const direct = coordsFromLink(url);
+    if (direct || !url || !SHORT_LINK.test(url)) return direct;
+    try {
+      const r = await (await withTimeout(`${LINK_OPENER}?u=${encodeURIComponent(url)}`, 9000)).json();
+      return coordsFromLink(r.url || '');
+    } catch (e) { return null; }
+  }
   const withTimeout = (url, ms) => { const c = new AbortController(), t = setTimeout(() => c.abort(), ms); return fetch(url, { signal: c.signal }).finally(() => clearTimeout(t)); };
   const placeLabel = pr => [pr.district || pr.locality || pr.city || pr.county, pr.state, pr.country].filter((v, i, a) => v && a.indexOf(v) === i).join(', ');
   // Country words in an address, so emergency numbers can show before the map answers
@@ -1426,9 +1441,9 @@
   // Find a stay on the map: its map link first, else an address search that has to share a place name with the address
   async function locate(p) {
     if (p.manual && p.lat != null) return p;   // added by search or with a full link
-    const b = p.stay || p.src || p, key = `v2|${b.name || ''}|${b.address || ''}|${b.maps || ''}`;
+    const b = p.stay || p.src || p, key = `v3|${b.name || ''}|${b.address || ''}|${b.maps || ''}`;
     if (b.geo && b.geo.key === key) return { ...p, ...b.geo };
-    const fromLink = coordsFromLink(b.maps);
+    const fromLink = await linkCoords(b.maps);
     if (fromLink) { const r = await reverseCC(fromLink); b.geo = { key, ...fromLink, cc: r.cc || guessCC(b.address + ' ' + b.name), label: r.label || '' }; save(); return { ...p, ...b.geo }; }
     const parts = (b.address || '').split(',').map(x => x.trim()).filter(Boolean);
     const places = parts.filter(x => !/\d/.test(x) && plain(x).length >= 4).map(plain);
@@ -1439,8 +1454,12 @@
         const feats = (await (await withTimeout(`https://photon.komoot.io/api/?q=${encodeURIComponent(q.slice(0, 180))}&limit=5&lang=en`, 8000)).json()).features || [];
         const ok = feats.find(f => {
           if (!places.length) return true;
+          // strict: the result must name a real place from the address (a city, area or country of 4+ letters)
           const pr = f.properties || {}, hay = plain([pr.name, pr.street, pr.district, pr.locality, pr.city, pr.county, pr.state, pr.country].join(' '));
-          return places.some(w => hay.includes(w) || w.includes(plain(pr.city || '~~')) || w.includes(plain(pr.country || '~~')));
+          const theirs = [pr.city, pr.district, pr.locality, pr.county, pr.state, pr.country].map(plain).filter(x => x.length >= 4);
+          const cc = guessCC(b.address + ' ' + b.name);
+          if (cc && pr.countrycode && pr.countrycode.toLowerCase() !== cc) return false;
+          return places.some(w => hay.includes(w) || theirs.some(t => w.includes(t)));
         });
         if (ok) { const [lon, lat] = ok.geometry.coordinates; b.geo = { key, lat, lon, cc: (ok.properties.countrycode || '').toLowerCase(), label: placeLabel(ok.properties) }; save(); return { ...p, ...b.geo }; }
       } catch (e) { /* too slow or offline: try the next, simpler search */ }
@@ -1546,10 +1565,17 @@
     $('#hlUrl').value = ''; $('#hlName').value = ''; $('#hlErr').hidden = true;
     $('#hlForm').hidden = true; $('#hlSearch').hidden = false; $('#hlShowLink').hidden = false;
     show('#handyAddDrawer');
-    if (p) searchPlaces($('#hlQ').value, $('#hlResults'), pickHandy); else setTimeout(() => $('#hlQ').focus(), 250);
+    if (p) searchPlaces($('#hlQ').value, $('#hlResults'), pickHandy, hlScope()); else setTimeout(() => $('#hlQ').focus(), 250);
+  }
+  // fixing a stay: only show places in its country
+  const CC_NAME = { vn: 'Vietnam', fr: 'France', my: 'Malaysia', sg: 'Singapore', th: 'Thailand', id: 'Indonesia', jp: 'Japan', kr: 'South Korea', ph: 'the Philippines', kh: 'Cambodia', au: 'Australia', gb: 'the UK', us: 'the US' };
+  function hlScope() {
+    if (!linkFor) return {};
+    const cc = guessCC(`${linkFor.address || ''} ${linkFor.name || ''}`);
+    return cc ? { cc, country: CC_NAME[cc] } : {};
   }
   let hlTimer;
-  $('#hlQ').addEventListener('input', () => { clearTimeout(hlTimer); hlTimer = setTimeout(() => searchPlaces($('#hlQ').value.trim(), $('#hlResults'), pickHandy), 350); });
+  $('#hlQ').addEventListener('input', () => { clearTimeout(hlTimer); hlTimer = setTimeout(() => searchPlaces($('#hlQ').value.trim(), $('#hlResults'), pickHandy, hlScope()), 350); });
   $('#hlShowLink').onclick = () => { $('#hlForm').hidden = false; $('#hlShowLink').hidden = true; $('#hlNameRow').hidden = !!linkFor; setTimeout(() => $('#hlUrl').focus(), 50); };
   // saving a place's position: on the stay (and its booking's map link) or on the added place
   async function placeAt(at, url, name, label, cc) {
@@ -1557,7 +1583,7 @@
       const target = linkFor.stay || linkFor.src;
       target.maps = url || gmaps(at);
       if (linkFor.manual) Object.assign(target, at, { cc: cc || '', address: target.address || label || '' });
-      else { const key = `v2|${target.name || ''}|${target.address || ''}|${target.maps}`; target.geo = { key, ...at, cc: cc || guessCC(`${target.address} ${target.name}`), label: label || '' }; }
+      else { const key = `v3|${target.name || ''}|${target.address || ''}|${target.maps}`; target.geo = { key, ...at, cc: cc || guessCC(`${target.address} ${target.name}`), label: label || '' }; }
       save(); hide(); renderHandy(); if (!linkFor.manual) renderBookings(); toast('Location saved');
       return;
     }
@@ -1570,7 +1596,10 @@
     e.preventDefault();
     const raw = $('#hlUrl').value.trim(), name = $('#hlName').value.trim(), err = $('#hlErr');
     if (!raw) { err.textContent = 'Paste a map link first.'; err.hidden = false; return; }
-    const at = coordsFromLink(raw), url = /[a-z]/i.test(raw) ? normaliseUrl(raw) : '';   // plain coordinates have no link
+    const url = /[a-z]/i.test(raw) ? normaliseUrl(raw) : '';   // plain coordinates have no link
+    const btn = $('#hlForm button[type=submit]'); btn.disabled = true; btn.textContent = 'Opening link…';
+    const at = coordsFromLink(raw) || await linkCoords(url);
+    btn.disabled = false; btn.textContent = 'Save';
     if (at) { const r = await reverseCC(at); return placeAt(at, url || gmaps(at), name || r.label?.split(',')[0], r.label, r.cc); }
     // a short share link: keep it for the Map button, find the place by its name
     if (linkFor) {
