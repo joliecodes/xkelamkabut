@@ -101,6 +101,7 @@
     <div class="tripsbar"><h2 class="sect">Handy</h2></div>
     <p class="muted hsub">The nearest useful places around where you're staying.</p>
     <div class="days filt htabs" id="handyTabs"></div>
+    <div class="hnear" id="handyNear"></div>
     <div id="handyBody"></div>
   </section>
 </main>
@@ -114,14 +115,18 @@
   <a href="#handy" data-v="handy"><svg class="ico"><use href="#i-handy"/></svg>Handy</a>
 </nav>
 
-<!-- Handy: add a place by hand -->
+<!-- Handy: add a place, or fix where a place is, with a map link -->
 <div class="drawer" id="handyAddDrawer" role="dialog" aria-modal="true">
   <div class="grab"></div>
-  <div class="viewhead"><div class="vt"><div class="vtype">Handy</div><h3>Add a place</h3></div>
+  <div class="viewhead"><div class="vt"><div class="vtype">Handy</div><h3 id="hlTitle">Add a place</h3></div>
     <button type="button" class="round" data-close aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button></div>
-  <p class="muted" style="margin:0 0 10px">Your Airbnb, a friend's place, or anywhere you'll be based.</p>
-  <input id="haQ" type="search" placeholder="Search a place or address" autocomplete="off" enterkeyhint="search">
-  <div class="results" id="haResults"></div>
+  <p class="muted" id="hlSub" style="margin:0 0 12px"></p>
+  <form id="hlForm" novalidate>
+    <label>Map link<input id="hlUrl" type="url" inputmode="url" placeholder="Paste a map link" autocomplete="off"></label>
+    <label id="hlNameRow">Name <span class="muted">(optional)</span><input id="hlName" placeholder="e.g. Cauterets BNB" autocomplete="off"></label>
+    <p class="err" id="hlErr" hidden></p>
+    <button type="submit" class="btn primary wide">Save</button>
+  </form>
 </div>
 
 <!-- Drawer -->

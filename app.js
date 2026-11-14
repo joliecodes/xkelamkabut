@@ -941,6 +941,7 @@
     stay: { label: 'Stay', icon: 'hotel', c: '#9a6fb0', bg: '#f3edf7', desc: 'Hotel, address, check-in and out', fields: [
       ['name', 'Name', 'text', 'e.g. Sunday Boutique Hotel'],
       ['address', 'Address', 'text', 'Street, area, city'],
+      ['maps', 'Map link', 'url', 'Google Maps, Waze or Apple Maps link'],
       [['phone', 'Phone', 'tel', '+84…'], ['ref', 'Booking ID', 'text', '']],
       [['inDate', 'Check-in date', 'date'], ['inTime', 'Check-in time', 'time']],
       [['outDate', 'Check-out date', 'date'], ['outTime', 'Check-out time', 'time']],
@@ -1038,7 +1039,7 @@
       return `<div class="bcard" ${style}>${head(b.name || 'Stay', n ? `${n} night${n > 1 ? 's' : ''}` : '')}
       <div class="stayd"><div><small>Check-in</small><b>${shortDate(b.inDate) || '—'}</b><span>${b.inTime ? 'from ' + fmtTime(b.inTime) : ''}</span></div><div><small>Check-out</small><b>${shortDate(b.outDate) || '—'}</b><span>${b.outTime ? 'by ' + fmtTime(b.outTime) : ''}</span></div></div>
       ${kv('Address', b.address)}${kv('Phone', b.phone, b.phone ? callBtn(b.phone) + copyBtn(b.phone) : '')}${kv('Booking ID', b.ref, copyBtn(b.ref || ''))}${kv('Room', b.room)}${kv('Notes', b.notes, '', 'note')}
-      ${mapLink(qLink(b), 'Open in Maps ↗', 'btn primary')}</div>`;
+      ${mapLink(b.maps ? { maps: b.maps } : qLink(b), 'Open in Maps ↗', 'btn primary')}</div>`;
     }
     return `<div class="bcard" ${style}>${head(b.title || 'Booking', [shortDate(b.date), fmtTime(b.time)].filter(Boolean).join(' · '))}
       ${kv('Booking ref', b.ref, copyBtn(b.ref || ''))}${kv('Phone', b.phone, b.phone ? callBtn(b.phone) : '')}${kv('Location', b.address)}${kv('Notes', b.notes, '', 'note')}
@@ -1221,7 +1222,7 @@
         ...(end || !b.arrTime ? {} : { flight: { from: '', to: '', arrTime: b.arrTime, arrDate: sameDay ? '' : b.arrDate, dur: parseDur(b.duration), shift: null } }),
       }, K.label.toLowerCase());
     } else if (b.kind === 'stay') {
-      const maps = (b.name || b.address) ? gq([b.name, b.address].filter(Boolean).join(', ')) : '';
+      const maps = b.maps || ((b.name || b.address) ? gq([b.name, b.address].filter(Boolean).join(', ')) : '');
       add(b.inDate, b.inTime || '14:00', { type: 'rest', title: `Check in · ${b.name || 'Stay'}`, maps, notes: b.ref ? 'Booking ID ' + b.ref : '' }, 'check-in');
       add(b.outDate, b.outTime || '11:00', { type: 'rest', title: `Check out · ${b.name || 'Stay'}`, maps }, 'check-out');
     } else {
@@ -1397,23 +1398,50 @@
     // the same hotel twice (two stays, or "Hôtel" vs "Hotel") shows once, keeping the accented spelling
     const stays = [];
     trip.bookings.filter(b => b.kind === 'stay' && (b.name || b.address)).forEach(b => {
-      const p = { id: b.id, name: b.name || b.address, address: b.address || '', stay: b };
+      const p = { id: b.id, name: b.name || b.address, address: b.address || '', maps: b.maps || '', stay: b };
       const same = stays.find(q => (b.name && plain(q.name) === plain(b.name)) || (b.address && plain(q.address) === plain(b.address)));
       if (!same) return stays.push(p);
       if (/[^\x00-\x7f]/.test(p.name) && !/[^\x00-\x7f]/.test(same.name)) same.name = p.name;
+      if (!same.maps && p.maps) { same.maps = p.maps; same.stay = b; }
     });
-    return [...stays, ...(trip.handy || []).map(p => ({ ...p, manual: true }))];
+    return [...stays, ...(trip.handy || []).map(p => ({ ...p, manual: true, src: p }))];
   }
+  // A position from a pasted map link (Google, Waze, Apple). Short share links hide it.
+  const SHORT_LINK = /(goo\.gl|maps\.app|g\.co\/|waze\.com\/ul\/h|bit\.ly)/i;
+  function coordsFromLink(u) {
+    u = decodeURIComponent(u || '');
+    const m = u.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || u.match(/[?&](?:q|ll|query|daddr|sll|destination)=(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/) || u.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    return m ? { lat: +m[1], lon: +m[2] } : null;
+  }
+  const withTimeout = (url, ms) => { const c = new AbortController(), t = setTimeout(() => c.abort(), ms); return fetch(url, { signal: c.signal }).finally(() => clearTimeout(t)); };
+  const placeLabel = pr => [pr.district || pr.locality || pr.city || pr.county, pr.state, pr.country].filter((v, i, a) => v && a.indexOf(v) === i).join(', ');
+  // Country words in an address, so emergency numbers can show before the map answers
+  const CC_WORDS = { vietnam: 'vn', 'viet nam': 'vn', france: 'fr', malaysia: 'my', singapore: 'sg', thailand: 'th', indonesia: 'id', japan: 'jp', korea: 'kr', philippines: 'ph', cambodia: 'kh', australia: 'au', 'united kingdom': 'gb', uk: 'gb', usa: 'us', 'united states': 'us', 'phu quoc': 'vn', paris: 'fr', 'kuala lumpur': 'my', bali: 'id', bangkok: 'th' };
+  const guessCC = t => { const s = plain(t); return Object.entries(CC_WORDS).find(([w]) => new RegExp(`\\b${w}\\b`).test(s))?.[1] || ''; };
+  async function reverseCC(pt) {
+    try { const f = (await (await withTimeout(`https://photon.komoot.io/reverse?lat=${pt.lat}&lon=${pt.lon}&lang=en`, 6000)).json()).features?.[0]; return f ? { cc: (f.properties.countrycode || '').toLowerCase(), label: placeLabel(f.properties) } : {}; } catch (e) { return {}; }
+  }
+  // Find a stay on the map: its map link first, else an address search that has to share a place name with the address
   async function locate(p) {
-    if (p.manual) return p;
-    const b = p.stay, key = `${b.name}|${b.address}`;
+    if (p.manual && p.lat != null) return p;
+    const b = p.stay || p.src || p, key = `v2|${b.name || ''}|${b.address || ''}|${b.maps || ''}`;
     if (b.geo && b.geo.key === key) return { ...p, ...b.geo };
-    for (const q of [b.address, `${b.name} ${b.address}`, b.name].filter(Boolean)) {
+    const fromLink = coordsFromLink(b.maps);
+    if (fromLink) { const r = await reverseCC(fromLink); b.geo = { key, ...fromLink, cc: r.cc || guessCC(b.address + ' ' + b.name), label: r.label || '' }; save(); return { ...p, ...b.geo }; }
+    const parts = (b.address || '').split(',').map(x => x.trim()).filter(Boolean);
+    const places = parts.filter(x => !/\d/.test(x) && plain(x).length >= 4).map(plain);
+    const tail = parts.filter(x => !/^\d/.test(x)).slice(-3).join(', ');
+    const queries = [b.address, tail, tail && b.name ? `${b.name}, ${tail}` : '', b.name].filter((q, i, a) => q && a.indexOf(q) === i);
+    for (const q of queries) {
       try {
-        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q.slice(0, 180))}&limit=1&lang=en`);
-        const f = (await res.json()).features?.[0];
-        if (f) { const [lon, lat] = f.geometry.coordinates; b.geo = { key, lat, lon, cc: (f.properties.countrycode || '').toLowerCase() }; save(); return { ...p, ...b.geo }; }
-      } catch (e) { break; }
+        const feats = (await (await withTimeout(`https://photon.komoot.io/api/?q=${encodeURIComponent(q.slice(0, 180))}&limit=5&lang=en`, 8000)).json()).features || [];
+        const ok = feats.find(f => {
+          if (!places.length) return true;
+          const pr = f.properties || {}, hay = plain([pr.name, pr.street, pr.district, pr.locality, pr.city, pr.county, pr.state, pr.country].join(' '));
+          return places.some(w => hay.includes(w) || w.includes(plain(pr.city || '~~')) || w.includes(plain(pr.country || '~~')));
+        });
+        if (ok) { const [lon, lat] = ok.geometry.coordinates; b.geo = { key, lat, lon, cc: (ok.properties.countrycode || '').toLowerCase(), label: placeLabel(ok.properties) }; save(); return { ...p, ...b.geo }; }
+      } catch (e) { /* too slow or offline: try the next, simpler search */ }
     }
     return null;
   }
@@ -1454,57 +1482,83 @@
     $('#handyTabs').innerHTML = places.map(p => `<button type="button" data-id="${p.id}" class="${p.id === handyCur ? 'on' : ''}">${icon(p.manual ? 'pin' : 'hotel')}<span>${esc(p.name)}</span></button>`).join('')
       + `<button type="button" class="add" id="handyAdd">${icon('plus')}<span>Add place</span></button>`;
     $('#handyTabs').querySelectorAll('[data-id]').forEach(b => b.onclick = () => { handyCur = b.dataset.id; renderHandy(); });
-    $('#handyAdd').onclick = openHandyAdd;
+    $('#handyAdd').onclick = () => openHandyLink(null);
     if (!places.length) {
+      $('#handyNear').innerHTML = '';
       box.innerHTML = `<div class="empty"><div class="big">${icon('hotel')}</div><p><b>Where are you staying?</b></p><p class="muted">Add a stay in Bookings, or tap Add place, to see the nearest convenience stores, pharmacies, clinics and police.</p></div>`;
       return;
     }
     const p = places.find(p => p.id === handyCur);
     const live = () => handyCur === p.id && currentView() === 'handy';
-    box.innerHTML = `<div class="hload muted">Finding ${esc(p.name)} on the map…</div>`;
-    const pt = await locate(p);
-    if (!live()) return;
-    if (!pt) { box.innerHTML = `<div class="hcard"><p><b>Couldn't find ${esc(p.name)} on the map.</b></p><p class="muted">Check the address in Bookings, or tap Add place and search for it.</p></div>`; return; }
-    const sos = `<div class="hsos"><div class="hhead">${icon('phone')}<b>Emergency numbers</b></div><div class="hsosr">${sosFor(pt.cc).map(([l, n]) => `<a href="tel:${n}"><b>${n}</b><small>${esc(l)}</small></a>`).join('')}</div></div>`;
+    let pt = null;
+    const sosHtml = cc => cc ? `<div class="hsos"><div class="hhead">${icon('phone')}<b>Emergency numbers</b></div><div class="hsosr">${sosFor(cc).map(([l, n]) => `<a href="tel:${n}"><b>${n}</b><small>${esc(l)}</small></a>`).join('')}</div></div>` : '';
     const row = x => `<div class="hrow"><span><b>${esc(x.name)}</b><small>${fmtDist(x.d)} · ${walk(x.d)}${x.phone ? ` · <a href="tel:${esc(x.phone.replace(/[^\d+]/g, ''))}">${esc(x.phone)}</a>` : ''}</small></span>${mapLink({ place: { name: x.name, lat: x.lat, lon: x.lon } }, 'Map ↗', 'map')}</div>`;
-    const gbtn = (c, cls) => `<a class="${cls}" href="${esc(gSearch(c[3], pt))}" target="_blank" rel="noopener">Google Maps Search</a>`;
-    // partial: the 1 km results are in, the wider look for empty categories is still going
-    const draw = (list, partial) => {
+    // Google Maps Search works before the map lookup: by name and address first, by position once known
+    const gUrl = c => pt ? gSearch(c[3], pt) : `https://www.google.com/maps/search/${encodeURIComponent(`${c[3]} near ${[p.name, p.address].filter(Boolean).join(', ')}`)}`;
+    const gbtn = (c, cls) => `<a class="${cls}" href="${esc(gUrl(c))}" target="_blank" rel="noopener">Google Maps Search</a>`;
+    const nearLine = () => {
+      $('#handyNear').innerHTML = pt ? `<span>Near: ${esc(pt.label || p.address || `${pt.lat.toFixed(4)}, ${pt.lon.toFixed(4)}`)}</span> · <button type="button" class="hlink" id="hWrong">Wrong place?</button>`
+        : `<span>Couldn't find ${esc(p.name)} on the map.</span> <button type="button" class="hlink" id="hWrong">Paste a map link</button>`;
+      $('#hWrong').onclick = () => openHandyLink(p);
+    };
+    // state: 'locating' | 'nomap' | 'busy' | list (partial or final)
+    const draw = (list, partial, state) => {
       const cats = HANDY_CATS.map(c => {
         const all = list ? list.filter(x => x.cat === c[0]).sort((a, b) => a.d - b.d) : null, near = all ? all.filter(x => x.d <= 1000).slice(0, 3) : [];
         let body;
-        if (!all) body = `<div class="hnone hwait">Looking nearby…</div>`;
+        if (!all) body = `<div class="hfind">${state === 'locating' ? '<span class="hwait">Looking nearby…</span>' : 'Find one'} ${gbtn(c, 'btn small')}</div>`;
         else if (near.length) body = near.map(row).join('') + `<div class="hmore">More options · ${gbtn(c, 'hlink')}</div>`;
         else if (all.length) body = `<div class="hnone">None found within 1 km</div><div class="hfind">Find one closer ${gbtn(c, 'btn small')}</div>${row(all[0])}`;
         else body = `<div class="hnone">None found ${partial ? 'within 1 km' : 'nearby'}</div><div class="hfind">${partial ? 'Find one closer' : 'Find one'} ${gbtn(c, 'btn small')}</div>${partial ? '<div class="hnone hwait">Looking further…</div>' : ''}`;
         return `<div class="hcat"><div class="hhead"><b>${c[1]}</b></div>${body}</div>`;
       }).join('');
-      box.innerHTML = sos + cats + (partial || !list ? '' : `<div class="hfoot">${p.manual ? `<button type="button" class="linkbtn" id="hRemove">Remove ${esc(p.name)}</button>` : ''}<button type="button" class="linkbtn" id="hRefresh">Refresh list</button><p class="attr">Map data © OpenStreetMap contributors. Some smaller places may be missing: use Google Maps Search to find more.</p></div>`);
+      const note = state === 'busy' ? `<div class="hcard"><p><b>The map server is busy right now.</b></p><p class="muted">Google Maps Search still works. Once loaded, nearby places are saved for offline use.</p><button type="button" class="btn small" id="hRetry">Try again</button></div>` : '';
+      const cc = pt?.cc || guessCC(`${p.address} ${p.name}`);
+      box.innerHTML = sosHtml(cc) + note + cats + (list && !partial ? `<div class="hfoot">${p.manual ? `<button type="button" class="linkbtn" id="hRemove">Remove ${esc(p.name)}</button>` : ''}<button type="button" class="linkbtn" id="hRefresh">Refresh list</button><p class="attr">Map data © OpenStreetMap contributors. Some smaller places may be missing: use Google Maps Search to find more.</p></div>`
+        : p.manual ? `<div class="hfoot"><button type="button" class="linkbtn" id="hRemove">Remove ${esc(p.name)}</button></div>` : '');
       const rf = $('#hRefresh'); if (rf) rf.onclick = () => { localStorage.removeItem(`xkk-handy2-${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`); renderHandy(); };
       const rm = $('#hRemove'); if (rm) rm.onclick = () => { trip.handy = (trip.handy || []).filter(x => x.id !== p.id); handyCur = null; save(); renderHandy(); toast('Removed'); };
+      const rt = $('#hRetry'); if (rt) rt.onclick = renderHandy;
     };
-    draw(null, true);
+    $('#handyNear').innerHTML = '<span class="hwait">Finding it on the map…</span>';
+    draw(null, true, 'locating');
+    pt = await locate(p);
+    if (!live()) return;
+    nearLine();
+    if (!pt) return draw(null, false, 'nomap');
+    draw(null, true, 'locating');
     try {
-      const list = await nearby(pt, (near, partial) => { if (live()) draw(near, partial); });
+      const list = await nearby(pt, near => { if (live()) draw(near, true); });
       if (live()) draw(list, false);
-    } catch (e) {
-      if (!live()) return;
-      box.innerHTML = sos + `<div class="hcard"><p><b>The map server is busy right now.</b></p><p class="muted">Try again in a moment. Once loaded, places are saved for offline use.</p><button type="button" class="btn" id="hRetry">Try again</button></div>`
-        + HANDY_CATS.map(c => `<div class="hcat"><div class="hhead"><b>${c[1]}</b></div><div class="hfind">Find one ${gbtn(c, 'btn small')}</div></div>`).join('');
-      $('#hRetry').onclick = renderHandy;
+    } catch (e) { if (live()) draw(null, false, 'busy'); }
+  }
+  // One drawer for "Add place" (p = null) and "Wrong place?" (p = the place to fix): paste a map link
+  let linkFor = null;
+  function openHandyLink(p) {
+    linkFor = p;
+    $('#hlTitle').textContent = p ? `Where is ${p.name}?` : 'Add a place';
+    $('#hlSub').textContent = p ? 'Paste a map link for this place. It will be used from now on.' : 'Your Airbnb, a friend’s place, or anywhere you’ll be based.';
+    $('#hlNameRow').hidden = !!p;
+    $('#hlUrl').value = ''; $('#hlName').value = ''; $('#hlErr').hidden = true;
+    show('#handyAddDrawer'); setTimeout(() => $('#hlUrl').focus(), 250);
+  }
+  $('#hlForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const url = normaliseUrl($('#hlUrl').value.trim()), name = $('#hlName').value.trim(), err = $('#hlErr');
+    if (!url) { err.textContent = 'Paste a map link first.'; err.hidden = false; return; }
+    const at = coordsFromLink(url);
+    if (linkFor) {
+      if (!at) { err.textContent = SHORT_LINK.test(url) ? 'This short link doesn’t include the location. In Google Maps, open the place and copy the link from the address bar instead.' : 'Couldn’t find a location in that link. Try a link copied from Google Maps, Waze or Apple Maps.'; err.hidden = false; return; }
+      const target = linkFor.stay || linkFor.src;
+      target.maps = url; delete target.geo;
+      if (linkFor.manual) { target.lat = at.lat; target.lon = at.lon; target.cc = ''; delete target.cc; const r = await reverseCC(at); target.cc = r.cc || ''; }
+      save(); hide(); renderHandy(); if (!linkFor.manual) renderBookings(); toast('Location saved');
+      return;
     }
-  }
-  function openHandyAdd() {
-    $('#haQ').value = ''; $('#haResults').innerHTML = '';
-    show('#handyAddDrawer'); setTimeout(() => $('#haQ').focus(), 250);
-  }
-  let haTimer;
-  $('#haQ').addEventListener('input', () => {
-    clearTimeout(haTimer);
-    haTimer = setTimeout(() => searchPlaces($('#haQ').value.trim(), $('#haResults'), pl => {
-      const id = uid(); (trip.handy ||= []).push({ id, name: pl.name, address: pl.address, lat: pl.lat, lon: pl.lon, cc: pl.cc });
-      handyCur = id; save(); hide(); renderHandy();
-    }), 350);
+    if (!at && !name) { err.textContent = 'This short link doesn’t include the location, so add a name for the place and it will be looked up.'; err.hidden = false; $('#hlName').focus(); return; }
+    const id = uid(), place = { id, name: name || 'My place', address: '', maps: url };
+    if (at) { const r = await reverseCC(at); Object.assign(place, at, { cc: r.cc || '', address: r.label || '' }); }
+    (trip.handy ||= []).push(place); handyCur = id; save(); hide(); renderHandy();
   });
 
   /* ---------- routing ---------- */

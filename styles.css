@@ -465,3 +465,7 @@ form input.warn{border-color:#e0a03a;background:#fff4df}
 #v-bookings{padding-bottom:90px}
 .hwait{font-style:italic}
 #v-handy .htabs{margin:4px -14px 6px;padding:2px 18px 12px}
+.hnear{font-size:13px;color:var(--muted);margin:-4px 4px 12px;display:flex;flex-wrap:wrap;gap:4px;align-items:baseline}
+.hnear .hlink,.hmore .hlink{border:0;background:none;padding:0;font-size:13px;cursor:pointer;text-decoration:underline}
+#hlForm .err{color:#c4453a;font-size:13px;margin:4px 0 10px;line-height:1.4}
+#hlForm .btn.wide{width:100%;margin-top:6px}
