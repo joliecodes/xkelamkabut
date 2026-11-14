@@ -1489,12 +1489,21 @@
       const rm = $('#hRemove'); if (rm) rm.onclick = () => { trip.handy = (trip.handy || []).filter(x => x.id !== p.id); handyCur = null; save(); renderHandy(); toast('Removed'); };
       const ask = $('#hAsk'); if (ask) ask.onclick = () => openHandyLink(p);
     };
-    // the tiles show at once with the booking's address, then switch to Google's address from the link if it differs
-    const tiles = words => `<div class="htiles">${HANDY_CATS.map(c => `<a class="htile" href="${esc(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${c[3]} near ${words}`)}`)}" target="_blank" rel="noopener">${icon(c[2])}<span>${c[1]}</span></a>`).join('')}</div><p class="attr hnote">Opens Google Maps searching around this place.</p>`;
+    // Each tile opens the stay itself in Google Maps (its map link, else its coordinates, else its name and address)
+    // and copies the search word, so you paste it there and Google searches around the stay
+    const b1 = p.stay || p.src || p;
+    const placeUrl = info => b1.maps || (b1.lat != null ? gmaps(b1) : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(info.text)}`);
+    const tiles = info => `<div class="htiles">${HANDY_CATS.map(c => `<a class="htile" href="${esc(placeUrl(info))}" target="_blank" rel="noopener" data-word="${esc(c[3])}">${icon(c[2])}<span>${c[1]}</span></a>`).join('')}</div>
+      <p class="attr hnote">Opens ${esc(p.name)} in Google Maps and copies the word. Paste it into the search box there: Google searches around your stay.</p>`;
     const show_ = info => {
-      $('#handyNear').innerHTML = `<span>Searching near: ${esc(info.text)}</span> · <button type="button" class="hlink" id="hWrong">Change</button>`;
+      $('#handyNear').innerHTML = `<span>Opens: ${esc(info.text)}</span> · <button type="button" class="hlink" id="hWrong">Change</button>`;
       $('#hWrong').onclick = () => openHandyLink(p);
-      box.innerHTML = sosHtml(info.cc) + tiles(info.text) + foot(); wire();
+      box.innerHTML = sosHtml(info.cc) + tiles(info) + foot(); wire();
+      box.querySelectorAll('.htile').forEach(a => a.addEventListener('click', () => {
+        const w = a.dataset.word;
+        try { navigator.clipboard?.writeText(w); } catch (e) {}
+        toast(`“${w}” copied. Paste it into Google Maps search`);
+      }));
     };
     const b0 = p.stay || p.src || p, quick = b0.geo || (b0.address && !b0.maps ? { text: [b0.name, b0.address].filter(Boolean).join(', '), cc: guessCC(b0.address) } : null);
     if (quick) show_(quick); else { $('#handyNear').innerHTML = '<span class="hwait">Reading the map link…</span>'; box.innerHTML = sosHtml(guessCC(`${p.address} ${p.name}`)); }
