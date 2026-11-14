@@ -679,7 +679,7 @@
         const name = pr.name || [pr.housenumber, pr.street].filter(Boolean).join(' ') || pr.city || 'Unnamed place';
         const address = [[pr.housenumber, pr.street].filter(Boolean).join(' '), pr.district || pr.locality, pr.city, pr.state, pr.country]
           .filter((v, i, a) => v && v !== name && a.indexOf(v) === i).join(', ');
-        return { name, address, lat: +lat.toFixed(6), lon: +lon.toFixed(6) };
+        return { name, address, lat: +lat.toFixed(6), lon: +lon.toFixed(6), cc: (pr.countrycode || '').toLowerCase() };
       });
       out.innerHTML = list.length ? '' : '<div class="pr muted">No matches. Try another spelling, or paste a link below.</div>';
       list.forEach(p => {
@@ -1347,8 +1347,132 @@
     } finally { btn.classList.remove('busy'); label.textContent = was; }
   });
 
+  /* ---------- Handy: useful places near each place you stay ---------- */
+  // Map data © OpenStreetMap contributors, via Overpass (nearby places) and Photon (finding the hotel)
+  const HANDY_CATS = [
+    ['conv', 'Convenience store', 'nwr["shop"="convenience"]', 'convenience store'],
+    ['pharm', 'Pharmacy', 'nwr["amenity"="pharmacy"];nwr["healthcare"="pharmacy"]', 'pharmacy'],
+    ['clinic', 'Clinic & hospital', 'nwr["amenity"~"^(clinic|hospital|doctors)$"]', 'clinic'],
+    ['police', 'Police', 'nwr["amenity"="police"]', 'police station'],
+    ['cash', 'ATM & money changer', 'nwr["amenity"~"^(atm|bureau_de_change)$"]', 'atm'],
+    ['super', 'Supermarket', 'nwr["shop"="supermarket"]', 'supermarket'],
+    ['laundry', 'Laundry', 'nwr["shop"~"^(laundry|dry_cleaning)$"]', 'laundry'],
+    ['fuel', 'Petrol station', 'nwr["amenity"="fuel"]', 'petrol station'],
+  ];
+  const CAT_OF = t => t.shop === 'convenience' ? 'conv' : t.amenity === 'pharmacy' || t.healthcare === 'pharmacy' ? 'pharm'
+    : /^(clinic|hospital|doctors)$/.test(t.amenity) ? 'clinic' : t.amenity === 'police' ? 'police' : /^(atm|bureau_de_change)$/.test(t.amenity) ? 'cash'
+    : t.shop === 'supermarket' ? 'super' : /^(laundry|dry_cleaning)$/.test(t.shop) ? 'laundry' : t.amenity === 'fuel' ? 'fuel' : '';
+  // Emergency numbers by country (tap to call)
+  const SOS = {
+    vn: [['Police', '113'], ['Ambulance', '115'], ['Fire', '114']],
+    my: [['Police & ambulance', '999'], ['Fire', '994'], ['From a mobile', '112']],
+    sg: [['Police', '999'], ['Ambulance & fire', '995']],
+    th: [['Police', '191'], ['Tourist police', '1155'], ['Ambulance', '1669'], ['Fire', '199']],
+    id: [['Police', '110'], ['Ambulance', '118'], ['Fire', '113']],
+    ph: [['Emergency', '911']], jp: [['Police', '110'], ['Ambulance & fire', '119']], kr: [['Police', '112'], ['Ambulance & fire', '119']],
+    cn: [['Police', '110'], ['Ambulance', '120'], ['Fire', '119']], hk: [['Emergency', '999']], tw: [['Police', '110'], ['Ambulance & fire', '119']],
+    kh: [['Police', '117'], ['Ambulance', '119'], ['Fire', '118']], au: [['Emergency', '000']], nz: [['Emergency', '111']],
+    us: [['Emergency', '911']], ca: [['Emergency', '911']], gb: [['Emergency', '999'], ['Also works', '112']], ae: [['Police', '999'], ['Ambulance', '998']],
+    qa: [['Emergency', '999']], in: [['Emergency', '112']], tr: [['Emergency', '112']],
+    fr: [['Emergency (EU)', '112'], ['Ambulance (SAMU)', '15'], ['Police', '17'], ['Fire', '18']],
+  };
+  const sosFor = cc => SOS[cc] || [['Emergency', '112']];
+  const distM = (a, b) => { const R = 6371e3, r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lon - a.lon) * r;
+    const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+  const fmtDist = m => m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`;
+  const walk = m => `${Math.max(1, Math.round(m / 80))} min walk`;
+  let handyCur = null;
+  // The places to look around: stays in Bookings, then any added by hand
+  function handyPlaces() {
+    const stays = trip.bookings.filter(b => b.kind === 'stay' && (b.name || b.address)).map(b => ({ id: b.id, name: b.name || b.address, address: b.address || '', stay: b }));
+    return [...stays, ...(trip.handy || []).map(p => ({ ...p, manual: true }))];
+  }
+  async function locate(p) {
+    if (p.manual) return p;
+    const b = p.stay, key = `${b.name}|${b.address}`;
+    if (b.geo && b.geo.key === key) return { ...p, ...b.geo };
+    for (const q of [b.address, `${b.name} ${b.address}`, b.name].filter(Boolean)) {
+      try {
+        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q.slice(0, 180))}&limit=1&lang=en`);
+        const f = (await res.json()).features?.[0];
+        if (f) { const [lon, lat] = f.geometry.coordinates; b.geo = { key, lat, lon, cc: (f.properties.countrycode || '').toLowerCase() }; save(); return { ...p, ...b.geo }; }
+      } catch (e) { break; }
+    }
+    return null;
+  }
+  async function nearby(pt) {
+    const ck = `xkk-handy-${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`;
+    try { const c = JSON.parse(localStorage.getItem(ck)); if (c && Date.now() - c.t < 30 * 864e5) return c.list; } catch (e) {}
+    const q = `[out:json][timeout:25];(${HANDY_CATS.flatMap(c => c[2].split(';')).map(x => `${x}(around:4000,${pt.lat},${pt.lon});`).join('')});out center tags 400;`;
+    let data = null;
+    for (const ep of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
+      try { const r = await fetch(ep, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }); if (r.ok) { data = await r.json(); break; } } catch (e) {}
+    }
+    if (!data) throw new Error('offline');
+    const list = data.elements.map(e => {
+      const t = e.tags || {}, lat = e.lat ?? e.center?.lat, lon = e.lon ?? e.center?.lon, cat = CAT_OF(t);
+      if (!cat || lat == null) return null;
+      const name = t.name || t['name:en'] || t.brand || t.operator || (cat === 'cash' ? (t.amenity === 'atm' ? 'ATM' : 'Money changer') : HANDY_CATS.find(c => c[0] === cat)[1]);
+      return { cat, name, lat, lon, phone: t.phone || t['contact:phone'] || '', d: Math.round(distM(pt, { lat, lon })) };
+    }).filter(Boolean).sort((a, b) => a.d - b.d);
+    try { localStorage.setItem(ck, JSON.stringify({ t: Date.now(), list })); } catch (e) {}
+    return list;
+  }
+  const gSearch = (word, pt) => `https://www.google.com/maps/search/${encodeURIComponent(word)}/@${pt.lat},${pt.lon},16z`;
+  async function renderHandy() {
+    const places = handyPlaces(), box = $('#handyBody');
+    if (!places.some(p => p.id === handyCur)) handyCur = places[0]?.id || null;
+    $('#handyTabs').innerHTML = places.map(p => `<button type="button" data-id="${p.id}" class="${p.id === handyCur ? 'on' : ''}">${icon(p.manual ? 'pin' : 'hotel')}<span>${esc(p.name)}</span></button>`).join('')
+      + `<button type="button" class="add" id="handyAdd">${icon('plus')}<span>Add place</span></button>`;
+    $('#handyTabs').querySelectorAll('[data-id]').forEach(b => b.onclick = () => { handyCur = b.dataset.id; renderHandy(); });
+    $('#handyAdd').onclick = openHandyAdd;
+    if (!places.length) {
+      box.innerHTML = `<div class="empty"><div class="big">${icon('hotel')}</div><p><b>Where are you staying?</b></p><p class="muted">Add a stay in Bookings, or tap Add place, to see the nearest convenience stores, pharmacies, clinics and police.</p></div>`;
+      return;
+    }
+    const p = places.find(p => p.id === handyCur);
+    box.innerHTML = `<div class="hload muted">Finding places near ${esc(p.name)}…</div>`;
+    const pt = await locate(p);
+    if (handyCur !== p.id || currentView() !== 'handy') return;
+    if (!pt) { box.innerHTML = `<div class="hcard"><p><b>Couldn't find ${esc(p.name)} on the map.</b></p><p class="muted">Check the address in Bookings, or tap Add place and search for it.</p></div>`; return; }
+    const sos = `<div class="hsos"><div class="hhead">${icon('phone')}<b>Emergency numbers</b></div><div class="hsosr">${sosFor(pt.cc).map(([l, n]) => `<a href="tel:${n}"><b>${n}</b><small>${esc(l)}</small></a>`).join('')}</div></div>`;
+    let list;
+    try { list = await nearby(pt); }
+    catch (e) {
+      if (handyCur !== p.id) return;
+      box.innerHTML = sos + `<div class="hcard"><p><b>Can't load nearby places right now.</b></p><p class="muted">Needs an internet connection the first time. Once loaded, they're saved for offline use.</p><button type="button" class="btn" id="hRetry">Try again</button></div>`;
+      $('#hRetry').onclick = renderHandy; return;
+    }
+    if (handyCur !== p.id || currentView() !== 'handy') return;
+    const row = x => `<div class="hrow"><span><b>${esc(x.name)}</b><small>${fmtDist(x.d)} · ${walk(x.d)}${x.phone ? ` · <a href="tel:${esc(x.phone.replace(/[^\d+]/g, ''))}">${esc(x.phone)}</a>` : ''}</small></span>${mapLink({ place: { name: x.name, lat: x.lat, lon: x.lon } }, 'Map ↗', 'map')}</div>`;
+    const gbtn = (c, cls) => `<a class="${cls}" href="${esc(gSearch(c[3], pt))}" target="_blank" rel="noopener">Google Maps Search</a>`;
+    const cats = HANDY_CATS.map(c => {
+      const all = list.filter(x => x.cat === c[0]), near = all.filter(x => x.d <= 1000).slice(0, 3);
+      let body;
+      if (near.length) body = near.map(row).join('') + `<div class="hmore">More options · ${gbtn(c, 'hlink')}</div>`;
+      else if (all.length) body = `<div class="hnone">None found within 1 km</div><div class="hfind">Find one closer ${gbtn(c, 'btn small')}</div>${row(all[0])}`;
+      else body = `<div class="hnone">None found nearby</div><div class="hfind">Find one ${gbtn(c, 'btn small')}</div>`;
+      return `<div class="hcat"><div class="hhead"><b>${c[1]}</b></div>${body}</div>`;
+    }).join('');
+    box.innerHTML = sos + cats + `<div class="hfoot">${p.manual ? `<button type="button" class="linkbtn" id="hRemove">Remove ${esc(p.name)}</button>` : ''}<button type="button" class="linkbtn" id="hRefresh">Refresh list</button><p class="attr">Map data © OpenStreetMap contributors. Some smaller places may be missing: use Google Maps Search to find more.</p></div>`;
+    $('#hRefresh').onclick = () => { localStorage.removeItem(`xkk-handy-${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`); renderHandy(); };
+    const rm = $('#hRemove'); if (rm) rm.onclick = () => { trip.handy = (trip.handy || []).filter(x => x.id !== p.id); handyCur = null; save(); renderHandy(); toast('Removed'); };
+  }
+  function openHandyAdd() {
+    $('#haQ').value = ''; $('#haResults').innerHTML = '';
+    show('#handyAddDrawer'); setTimeout(() => $('#haQ').focus(), 250);
+  }
+  let haTimer;
+  $('#haQ').addEventListener('input', () => {
+    clearTimeout(haTimer);
+    haTimer = setTimeout(() => searchPlaces($('#haQ').value.trim(), $('#haResults'), pl => {
+      const id = uid(); (trip.handy ||= []).push({ id, name: pl.name, address: pl.address, lat: pl.lat, lon: pl.lon, cc: pl.cc });
+      handyCur = id; save(); hide(); renderHandy();
+    }), 350);
+  });
+
   /* ---------- routing ---------- */
-  const VIEWS = ['trips', 'itinerary', 'bookings', 'packing'];
+  const VIEWS = ['trips', 'itinerary', 'bookings', 'packing', 'handy'];
   function currentView() { const h = location.hash.slice(1); return VIEWS.includes(h) ? h : 'trips'; }
   let lastView = null;
   function route() {
@@ -1360,6 +1484,7 @@
     if (v === 'trips') renderTrips();
     if (v === 'packing') renderPacking();
     if (v === 'bookings') renderBookings();
+    if (v === 'handy') renderHandy();
     if (v === 'itinerary' && lastView !== 'itinerary') { renderDays(); renderGrid(); requestAnimationFrame(scrollToStart); }
     if (v !== 'itinerary') { scrollTo(0, 0); $('#holdTip')?.remove(); }
     lastView = v;

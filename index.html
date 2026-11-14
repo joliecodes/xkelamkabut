@@ -27,6 +27,7 @@
     <symbol id="i-train" viewBox="0 0 24 24"><path d="M8 3.1V7a4 4 0 0 0 8 0V3.1"/><path d="m9 15-1-1"/><path d="m15 15 1-1"/><path d="M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z"/><path d="m8 19-2 3"/><path d="m16 19 2 3"/></symbol>
     <symbol id="i-bus" viewBox="0 0 24 24"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><path d="M9 18h5"/><circle cx="16" cy="18" r="2"/></symbol>
     <symbol id="i-ferry" viewBox="0 0 24 24"><path d="M12 10.189V14"/><path d="M12 2v3"/><path d="M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6"/><path d="M19.38 20A11.6 11.6 0 0 0 21 14l-8.188-3.639a2 2 0 0 0-1.624 0L3 14a11.6 11.6 0 0 0 2.81 7.76"/><path d="M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1s1.2 1 2.5 1c2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/></symbol>
+    <symbol id="i-handy" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
     <symbol id="i-other" viewBox="0 0 24 24"><path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.13-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.13a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.13 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.13a.5.5 0 0 1-.96 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/></symbol>
     <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 6h.01M3 12h.01M3 18h.01M8 6h13M8 12h13M8 18h13"/></symbol>
@@ -95,6 +96,13 @@
     </div>
     <div id="packList"></div>
   </section>
+
+  <section class="view" id="v-handy">
+    <div class="tripsbar"><h2 class="sect">Handy</h2></div>
+    <p class="muted hsub">The nearest useful places around where you're staying.</p>
+    <div class="days filt htabs" id="handyTabs"></div>
+    <div id="handyBody"></div>
+  </section>
 </main>
 
 <nav class="tabs">
@@ -102,7 +110,18 @@
   <a href="#itinerary" data-v="itinerary" class="on"><svg class="ico"><use href="#i-calendar"/></svg>Itinerary</a>
   <a href="#bookings" data-v="bookings"><svg class="ico"><use href="#i-plane"/></svg>Bookings</a>
   <a href="#packing" data-v="packing"><svg class="ico"><use href="#i-bag"/></svg>Packing</a>
+  <a href="#handy" data-v="handy"><svg class="ico"><use href="#i-handy"/></svg>Handy</a>
 </nav>
+
+<!-- Handy: add a place by hand -->
+<div class="drawer" id="handyAddDrawer" role="dialog" aria-modal="true">
+  <div class="grab"></div>
+  <div class="viewhead"><div class="vt"><div class="vtype">Handy</div><h3>Add a place</h3></div>
+    <button type="button" class="round" data-close aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button></div>
+  <p class="muted" style="margin:0 0 10px">Your Airbnb, a friend's place, or anywhere you'll be based.</p>
+  <input id="haQ" type="search" placeholder="Search a place or address" autocomplete="off" enterkeyhint="search">
+  <div class="results" id="haResults"></div>
+</div>
 
 <!-- Drawer -->
 <div class="backdrop" id="backdrop"></div>
