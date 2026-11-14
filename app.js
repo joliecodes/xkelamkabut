@@ -1431,7 +1431,7 @@
     } catch (e) { return null; }
   }
   const withTimeout = (url, ms) => { const c = new AbortController(), t = setTimeout(() => c.abort(), ms); return fetch(url, { signal: c.signal }).finally(() => clearTimeout(t)); };
-  const placeLabel = pr => [pr.district || pr.locality || pr.city || pr.county, pr.state, pr.country].filter((v, i, a) => v && a.indexOf(v) === i).join(', ');
+  const placeLabel = pr => [pr.district || pr.locality, pr.city || pr.county, pr.state, pr.country].filter((v, i, a) => v && a.indexOf(v) === i).join(', ');
   // Country words in an address, so emergency numbers can show before the map answers
   const CC_WORDS = { vietnam: 'vn', 'viet nam': 'vn', france: 'fr', malaysia: 'my', singapore: 'sg', thailand: 'th', indonesia: 'id', japan: 'jp', korea: 'kr', philippines: 'ph', cambodia: 'kh', australia: 'au', 'united kingdom': 'gb', uk: 'gb', usa: 'us', 'united states': 'us', 'phu quoc': 'vn', paris: 'fr', 'kuala lumpur': 'my', bali: 'id', bangkok: 'th' };
   const guessCC = t => { const s = plain(t); return Object.entries(CC_WORDS).find(([w]) => new RegExp(`\\b${w}\\b`).test(s))?.[1] || ''; };
@@ -1441,7 +1441,7 @@
   // Find a stay on the map: its map link first, else an address search that has to share a place name with the address
   async function locate(p) {
     if (p.manual && p.lat != null) return p;   // added by search or with a full link
-    const b = p.stay || p.src || p, key = `v3|${b.name || ''}|${b.address || ''}|${b.maps || ''}`;
+    const b = p.stay || p.src || p, key = `v4|${b.name || ''}|${b.address || ''}|${b.maps || ''}`;
     if (b.geo && b.geo.key === key) return { ...p, ...b.geo };
     const fromLink = await linkCoords(b.maps);
     if (fromLink) { const r = await reverseCC(fromLink); b.geo = { key, ...fromLink, cc: r.cc || guessCC(b.address + ' ' + b.name), label: r.label || '' }; save(); return { ...p, ...b.geo }; }
@@ -1515,9 +1515,11 @@
     let pt = null;
     const sosHtml = cc => cc ? `<div class="hsos"><div class="hhead">${icon('phone')}<b>Emergency numbers</b></div><div class="hsosr">${sosFor(cc).map(([l, n]) => `<a href="tel:${n}"><b>${n}</b><small>${esc(l)}</small></a>`).join('')}</div></div>` : '';
     const row = x => `<div class="hrow"><span><b>${esc(x.name)}</b><small>${fmtDist(x.d)} · ${walk(x.d)}${x.phone ? ` · <a href="tel:${esc(x.phone.replace(/[^\d+]/g, ''))}">${esc(x.phone)}</a>` : ''}</small></span>${mapLink({ place: { name: x.name, lat: x.lat, lon: x.lon } }, 'Map ↗', 'map')}</div>`;
-    // Google Maps Search works before the map lookup: by name and address first, by position once known
-    const gUrl = c => pt ? gSearch(c[3], pt) : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${c[3]} near ${[p.name, p.address].filter(Boolean).join(', ')}`)}`;
-    const gbtn = (c, cls) => `<a class="${cls}" href="${esc(gUrl(c))}" target="_blank" rel="noopener">Google Maps Search</a>`;
+    // Google Maps Search: the web link searches the area by name (never the hotel name, which can match abroad);
+    // on phones a tap opens the Google Maps app centred on the exact spot from your link (see openGSearch)
+    const areaOf = () => pt?.label || p.address.split(',').map(x => x.trim()).filter(x => x && !/\d/.test(x)).slice(-3).join(', ') || p.address;
+    const gUrl = c => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${c[3]} near ${areaOf()}`)}`;
+    const gbtn = (c, cls) => `<a class="${cls}" href="${esc(gUrl(c))}" target="_blank" rel="noopener" data-gq="${esc(c[3])}"${pt ? ` data-at="${pt.lat},${pt.lon}"` : ''}>Google Maps Search</a>`;
     const nearLine = () => {
       $('#handyNear').innerHTML = pt ? `<span>Near: ${esc(pt.label || p.address || `${pt.lat.toFixed(4)}, ${pt.lon.toFixed(4)}`)}</span> · <button type="button" class="hlink" id="hWrong">Wrong place?</button>`
         : `<span>Couldn't find ${esc(p.name)} on the map.</span> <button type="button" class="hlink" id="hWrong">Paste a map link</button>`;
@@ -1554,6 +1556,21 @@
       if (live()) draw(list, false);
     } catch (e) { if (live()) draw(null, false, 'busy'); }
   }
+  // Tap on Google Maps Search: open the maps app itself, searching around the exact coordinates.
+  // iPhone: comgooglemaps:// (Google Maps app), Android: geo:. If the app doesn't open, the area-name web search does.
+  $('#handyBody').addEventListener('click', e => {
+    const a = e.target.closest('a[data-gq]'); if (!a || !a.dataset.at) return;
+    const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/i.test(ua) || (/Mac/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/i.test(ua);
+    const [lat, lon] = a.dataset.at.split(','), q = encodeURIComponent(a.dataset.gq);
+    if (!ios && !android) { e.preventDefault(); window.open(`https://www.google.com/maps/search/${q}/@${lat},${lon},15z`, '_blank', 'noopener'); return; }
+    e.preventDefault();
+    const web = a.href;
+    let left = false; const onHide = () => { left = true; };
+    document.addEventListener('visibilitychange', onHide, { once: true });
+    location.href = ios ? `comgooglemaps://?q=${q}&center=${lat},${lon}&zoom=15` : `geo:${lat},${lon}?q=${q}`;
+    setTimeout(() => { document.removeEventListener('visibilitychange', onHide); if (!left && !document.hidden) window.open(web, '_blank', 'noopener'); }, 1500);
+  });
+
   // One drawer for "Add place" (p = null) and "Wrong place?" (p = the place to fix),
   // the same as an itinerary item's location: search a place, or paste a link instead
   let linkFor = null;
@@ -1583,7 +1600,7 @@
       const target = linkFor.stay || linkFor.src;
       target.maps = url || gmaps(at);
       if (linkFor.manual) Object.assign(target, at, { cc: cc || '', address: target.address || label || '' });
-      else { const key = `v3|${target.name || ''}|${target.address || ''}|${target.maps}`; target.geo = { key, ...at, cc: cc || guessCC(`${target.address} ${target.name}`), label: label || '' }; }
+      else { const key = `v4|${target.name || ''}|${target.address || ''}|${target.maps}`; target.geo = { key, ...at, cc: cc || guessCC(`${target.address} ${target.name}`), label: label || '' }; }
       save(); hide(); renderHandy(); if (!linkFor.manual) renderBookings(); toast('Location saved');
       return;
     }
