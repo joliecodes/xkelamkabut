@@ -1477,7 +1477,8 @@
     try { localStorage.setItem(ck, JSON.stringify({ t: Date.now(), list })); } catch (e) {}
     return list;
   }
-  const gSearch = (word, pt) => `https://www.google.com/maps/search/${encodeURIComponent(word)}/@${pt.lat},${pt.lon},16z`;
+  // The place goes in the search words: the Google Maps app ignores a map centre and would search around you
+  const gSearch = (word, pt) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${word} near ${pt.lat.toFixed(5)},${pt.lon.toFixed(5)}`)}`;
   async function renderHandy() {
     const places = handyPlaces(), box = $('#handyBody');
     if (!places.some(p => p.id === handyCur)) handyCur = places[0]?.id || null;
@@ -1496,7 +1497,7 @@
     const sosHtml = cc => cc ? `<div class="hsos"><div class="hhead">${icon('phone')}<b>Emergency numbers</b></div><div class="hsosr">${sosFor(cc).map(([l, n]) => `<a href="tel:${n}"><b>${n}</b><small>${esc(l)}</small></a>`).join('')}</div></div>` : '';
     const row = x => `<div class="hrow"><span><b>${esc(x.name)}</b><small>${fmtDist(x.d)} · ${walk(x.d)}${x.phone ? ` · <a href="tel:${esc(x.phone.replace(/[^\d+]/g, ''))}">${esc(x.phone)}</a>` : ''}</small></span>${mapLink({ place: { name: x.name, lat: x.lat, lon: x.lon } }, 'Map ↗', 'map')}</div>`;
     // Google Maps Search works before the map lookup: by name and address first, by position once known
-    const gUrl = c => pt ? gSearch(c[3], pt) : `https://www.google.com/maps/search/${encodeURIComponent(`${c[3]} near ${[p.name, p.address].filter(Boolean).join(', ')}`)}`;
+    const gUrl = c => pt ? gSearch(c[3], pt) : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${c[3]} near ${[p.name, p.address].filter(Boolean).join(', ')}`)}`;
     const gbtn = (c, cls) => `<a class="${cls}" href="${esc(gUrl(c))}" target="_blank" rel="noopener">Google Maps Search</a>`;
     const nearLine = () => {
       $('#handyNear').innerHTML = pt ? `<span>Near: ${esc(pt.label || p.address || `${pt.lat.toFixed(4)}, ${pt.lon.toFixed(4)}`)}</span> · <button type="button" class="hlink" id="hWrong">Wrong place?</button>`
