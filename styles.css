@@ -428,7 +428,7 @@ form input.warn{border-color:#e0a03a;background:#fff4df}
 .lane .item.narrow .t,.lane .item.narrow .m{padding-right:0}
 /* Handy tab */
 .hsub{margin:-6px 4px 10px;font-size:14px}
-.htabs{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 12px;scrollbar-width:none}
+.htabs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
 .htabs::-webkit-scrollbar{display:none}
 .htabs button{flex:none;display:flex;align-items:center;gap:7px;border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:9px 14px;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer;max-width:240px}
 .htabs button span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -463,3 +463,5 @@ form input.warn{border-color:#e0a03a;background:#fff4df}
 .fab .ico{width:26px;height:26px;stroke-width:2.4}
 .fab[hidden]{display:none}
 #v-bookings{padding-bottom:90px}
+.hwait{font-style:italic}
+#v-handy .htabs{margin:4px -14px 6px;padding:2px 18px 12px}

@@ -1403,21 +1403,33 @@
     }
     return null;
   }
-  async function nearby(pt) {
-    const ck = `xkk-handy-${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`;
+  // Ask several map servers at once; the first good answer wins, nobody waits more than 10 s
+  const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+  function overpass(q) {
+    const ctls = OVERPASS.map(() => new AbortController());
+    const timer = setTimeout(() => ctls.forEach(c => c.abort()), 10000);
+    return Promise.any(OVERPASS.map((ep, i) => fetch(ep, { method: 'POST', signal: ctls[i].signal, body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })))
+      .then(d => { ctls.forEach(c => c.abort()); return d; })
+      .finally(() => clearTimeout(timer));
+  }
+  const toPlaces = (data, pt) => data.elements.map(e => {
+    const t = e.tags || {}, lat = e.lat ?? e.center?.lat, lon = e.lon ?? e.center?.lon, cat = CAT_OF(t);
+    if (!cat || lat == null) return null;
+    const name = t.name || t['name:en'] || t.brand || t.operator || (cat === 'cash' ? (t.amenity === 'atm' ? 'ATM' : 'Money changer') : HANDY_CATS.find(c => c[0] === cat)[1]);
+    return { cat, name, lat, lon, phone: t.phone || t['contact:phone'] || '', d: Math.round(distM(pt, { lat, lon })) };
+  }).filter(Boolean);
+  const catQuery = (cats, r, pt, cap) => `[out:json][timeout:9];${cats.map(c => `(${c[2].split(';').map(x => `${x}(around:${r},${pt.lat},${pt.lon});`).join('')});out center tags ${cap};`).join('')}`;
+  // Step 1: everything within 1 km. Step 2: only for empty categories, the nearest within 5 km.
+  async function nearby(pt, onStep) {
+    const ck = `xkk-handy2-${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`;
     try { const c = JSON.parse(localStorage.getItem(ck)); if (c && Date.now() - c.t < 30 * 864e5) return c.list; } catch (e) {}
-    const q = `[out:json][timeout:25];(${HANDY_CATS.flatMap(c => c[2].split(';')).map(x => `${x}(around:4000,${pt.lat},${pt.lon});`).join('')});out center tags 400;`;
-    let data = null;
-    for (const ep of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
-      try { const r = await fetch(ep, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }); if (r.ok) { data = await r.json(); break; } } catch (e) {}
-    }
-    if (!data) throw new Error('offline');
-    const list = data.elements.map(e => {
-      const t = e.tags || {}, lat = e.lat ?? e.center?.lat, lon = e.lon ?? e.center?.lon, cat = CAT_OF(t);
-      if (!cat || lat == null) return null;
-      const name = t.name || t['name:en'] || t.brand || t.operator || (cat === 'cash' ? (t.amenity === 'atm' ? 'ATM' : 'Money changer') : HANDY_CATS.find(c => c[0] === cat)[1]);
-      return { cat, name, lat, lon, phone: t.phone || t['contact:phone'] || '', d: Math.round(distM(pt, { lat, lon })) };
-    }).filter(Boolean).sort((a, b) => a.d - b.d);
+    const near = toPlaces(await overpass(catQuery(HANDY_CATS, 1000, pt, 60)), pt);
+    onStep(near, true);
+    const empty = HANDY_CATS.filter(c => !near.some(x => x.cat === c[0]));
+    let far = [];
+    if (empty.length) { try { far = toPlaces(await overpass(catQuery(empty, 5000, pt, 25)), pt); } catch (e) {} }
+    const list = [...near, ...far].sort((a, b) => a.d - b.d);
     try { localStorage.setItem(ck, JSON.stringify({ t: Date.now(), list })); } catch (e) {}
     return list;
   }
@@ -1434,32 +1446,39 @@
       return;
     }
     const p = places.find(p => p.id === handyCur);
-    box.innerHTML = `<div class="hload muted">Finding places near ${esc(p.name)}…</div>`;
+    const live = () => handyCur === p.id && currentView() === 'handy';
+    box.innerHTML = `<div class="hload muted">Finding ${esc(p.name)} on the map…</div>`;
     const pt = await locate(p);
-    if (handyCur !== p.id || currentView() !== 'handy') return;
+    if (!live()) return;
     if (!pt) { box.innerHTML = `<div class="hcard"><p><b>Couldn't find ${esc(p.name)} on the map.</b></p><p class="muted">Check the address in Bookings, or tap Add place and search for it.</p></div>`; return; }
     const sos = `<div class="hsos"><div class="hhead">${icon('phone')}<b>Emergency numbers</b></div><div class="hsosr">${sosFor(pt.cc).map(([l, n]) => `<a href="tel:${n}"><b>${n}</b><small>${esc(l)}</small></a>`).join('')}</div></div>`;
-    let list;
-    try { list = await nearby(pt); }
-    catch (e) {
-      if (handyCur !== p.id) return;
-      box.innerHTML = sos + `<div class="hcard"><p><b>Can't load nearby places right now.</b></p><p class="muted">Needs an internet connection the first time. Once loaded, they're saved for offline use.</p><button type="button" class="btn" id="hRetry">Try again</button></div>`;
-      $('#hRetry').onclick = renderHandy; return;
-    }
-    if (handyCur !== p.id || currentView() !== 'handy') return;
     const row = x => `<div class="hrow"><span><b>${esc(x.name)}</b><small>${fmtDist(x.d)} · ${walk(x.d)}${x.phone ? ` · <a href="tel:${esc(x.phone.replace(/[^\d+]/g, ''))}">${esc(x.phone)}</a>` : ''}</small></span>${mapLink({ place: { name: x.name, lat: x.lat, lon: x.lon } }, 'Map ↗', 'map')}</div>`;
     const gbtn = (c, cls) => `<a class="${cls}" href="${esc(gSearch(c[3], pt))}" target="_blank" rel="noopener">Google Maps Search</a>`;
-    const cats = HANDY_CATS.map(c => {
-      const all = list.filter(x => x.cat === c[0]), near = all.filter(x => x.d <= 1000).slice(0, 3);
-      let body;
-      if (near.length) body = near.map(row).join('') + `<div class="hmore">More options · ${gbtn(c, 'hlink')}</div>`;
-      else if (all.length) body = `<div class="hnone">None found within 1 km</div><div class="hfind">Find one closer ${gbtn(c, 'btn small')}</div>${row(all[0])}`;
-      else body = `<div class="hnone">None found nearby</div><div class="hfind">Find one ${gbtn(c, 'btn small')}</div>`;
-      return `<div class="hcat"><div class="hhead"><b>${c[1]}</b></div>${body}</div>`;
-    }).join('');
-    box.innerHTML = sos + cats + `<div class="hfoot">${p.manual ? `<button type="button" class="linkbtn" id="hRemove">Remove ${esc(p.name)}</button>` : ''}<button type="button" class="linkbtn" id="hRefresh">Refresh list</button><p class="attr">Map data © OpenStreetMap contributors. Some smaller places may be missing: use Google Maps Search to find more.</p></div>`;
-    $('#hRefresh').onclick = () => { localStorage.removeItem(`xkk-handy-${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`); renderHandy(); };
-    const rm = $('#hRemove'); if (rm) rm.onclick = () => { trip.handy = (trip.handy || []).filter(x => x.id !== p.id); handyCur = null; save(); renderHandy(); toast('Removed'); };
+    // partial: the 1 km results are in, the wider look for empty categories is still going
+    const draw = (list, partial) => {
+      const cats = HANDY_CATS.map(c => {
+        const all = list ? list.filter(x => x.cat === c[0]).sort((a, b) => a.d - b.d) : null, near = all ? all.filter(x => x.d <= 1000).slice(0, 3) : [];
+        let body;
+        if (!all) body = `<div class="hnone hwait">Looking nearby…</div>`;
+        else if (near.length) body = near.map(row).join('') + `<div class="hmore">More options · ${gbtn(c, 'hlink')}</div>`;
+        else if (all.length) body = `<div class="hnone">None found within 1 km</div><div class="hfind">Find one closer ${gbtn(c, 'btn small')}</div>${row(all[0])}`;
+        else body = `<div class="hnone">None found ${partial ? 'within 1 km' : 'nearby'}</div><div class="hfind">${partial ? 'Find one closer' : 'Find one'} ${gbtn(c, 'btn small')}</div>${partial ? '<div class="hnone hwait">Looking further…</div>' : ''}`;
+        return `<div class="hcat"><div class="hhead"><b>${c[1]}</b></div>${body}</div>`;
+      }).join('');
+      box.innerHTML = sos + cats + (partial || !list ? '' : `<div class="hfoot">${p.manual ? `<button type="button" class="linkbtn" id="hRemove">Remove ${esc(p.name)}</button>` : ''}<button type="button" class="linkbtn" id="hRefresh">Refresh list</button><p class="attr">Map data © OpenStreetMap contributors. Some smaller places may be missing: use Google Maps Search to find more.</p></div>`);
+      const rf = $('#hRefresh'); if (rf) rf.onclick = () => { localStorage.removeItem(`xkk-handy2-${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`); renderHandy(); };
+      const rm = $('#hRemove'); if (rm) rm.onclick = () => { trip.handy = (trip.handy || []).filter(x => x.id !== p.id); handyCur = null; save(); renderHandy(); toast('Removed'); };
+    };
+    draw(null, true);
+    try {
+      const list = await nearby(pt, (near, partial) => { if (live()) draw(near, partial); });
+      if (live()) draw(list, false);
+    } catch (e) {
+      if (!live()) return;
+      box.innerHTML = sos + `<div class="hcard"><p><b>The map server is busy right now.</b></p><p class="muted">Try again in a moment. Once loaded, places are saved for offline use.</p><button type="button" class="btn" id="hRetry">Try again</button></div>`
+        + HANDY_CATS.map(c => `<div class="hcat"><div class="hhead"><b>${c[1]}</b></div><div class="hfind">Find one ${gbtn(c, 'btn small')}</div></div>`).join('');
+      $('#hRetry').onclick = renderHandy;
+    }
   }
   function openHandyAdd() {
     $('#haQ').value = ''; $('#haResults').innerHTML = '';
