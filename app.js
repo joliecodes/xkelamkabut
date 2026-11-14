@@ -1422,13 +1422,26 @@
   }
   // Short share links (maps.app.goo.gl/…) are opened by your own small Cloudflare worker to find the coordinates
   const LINK_OPENER = 'https://xkk-links.joliecodes.workers.dev/';
-  async function linkCoords(url) {
+  // What a link tells us: exact coordinates when it has them, and Google's own name and address for the place.
+  // Google answers the link opener with a "sorry" page, but the real destination is written inside it.
+  async function resolveLink(url) {
     const direct = coordsFromLink(url);
-    if (direct || !url || !SHORT_LINK.test(url)) return direct;
+    if (direct || !url) return { at: direct, text: '' };
+    let full = url;
+    if (SHORT_LINK.test(url)) {
+      try { full = (await (await withTimeout(`${LINK_OPENER}?u=${encodeURIComponent(url)}`, 9000)).json()).url || url; } catch (e) { return { at: null, text: '' }; }
+    }
+    try { const u = new URL(full); if (/\/sorry\//.test(u.pathname) && u.searchParams.get('continue')) full = u.searchParams.get('continue'); } catch (e) {}
+    const at = coordsFromLink(full);
+    let text = '';
     try {
-      const r = await (await withTimeout(`${LINK_OPENER}?u=${encodeURIComponent(url)}`, 9000)).json();
-      return coordsFromLink(r.url || '');
-    } catch (e) { return null; }
+      const u = new URL(full);
+      text = u.searchParams.get('q') || u.searchParams.get('query') || u.searchParams.get('daddr') || '';
+      if (!text) { const m = u.pathname.match(/\/maps\/place\/([^/]+)/); if (m) text = decodeURIComponent(m[1]); }
+    } catch (e) {}
+    text = text.replace(/\+/g, ' ').trim();
+    if (/^-?\d+\.\d+\s*,\s*-?\d+\.\d+$/.test(text)) text = '';
+    return { at, text };
   }
   const withTimeout = (url, ms) => { const c = new AbortController(), t = setTimeout(() => c.abort(), ms); return fetch(url, { signal: c.signal }).finally(() => clearTimeout(t)); };
   const placeLabel = pr => [pr.district || pr.locality, pr.city || pr.county, pr.state, pr.country].filter((v, i, a) => v && a.indexOf(v) === i).join(', ');
@@ -1438,33 +1451,42 @@
   async function reverseCC(pt) {
     try { const f = (await (await withTimeout(`https://photon.komoot.io/reverse?lat=${pt.lat}&lon=${pt.lon}&lang=en`, 6000)).json()).features?.[0]; return f ? { cc: (f.properties.countrycode || '').toLowerCase(), label: placeLabel(f.properties) } : {}; } catch (e) { return {}; }
   }
-  // Find a stay on the map: its map link first, else an address search that has to share a place name with the address
+  // Where a place is. Returns { lat, lon (only when the exact spot is known), cc, label, text (words for Google) }
+  // or null when there's nothing to go on (no link, no address): then the app asks for a link.
   async function locate(p) {
-    if (p.manual && p.lat != null) return p;   // added by search or with a full link
-    const b = p.stay || p.src || p, key = `v4|${b.name || ''}|${b.address || ''}|${b.maps || ''}`;
+    const b = p.stay || p.src || p;
+    if (p.manual && p.lat != null) return { ...p, text: p.text || [p.name, p.address].filter(Boolean).join(', ') };
+    const key = `v5|${b.name || ''}|${b.address || ''}|${b.maps || ''}`;
     if (b.geo && b.geo.key === key) return { ...p, ...b.geo };
-    const fromLink = await linkCoords(b.maps);
-    if (fromLink) { const r = await reverseCC(fromLink); b.geo = { key, ...fromLink, cc: r.cc || guessCC(b.address + ' ' + b.name), label: r.label || '' }; save(); return { ...p, ...b.geo }; }
-    const parts = (b.address || '').split(',').map(x => x.trim()).filter(Boolean);
-    const places = parts.filter(x => !/\d/.test(x) && plain(x).length >= 4).map(plain);
-    const tail = parts.filter(x => !/^\d/.test(x)).slice(-3).join(', ');
-    const queries = [b.address, tail, tail && b.name ? `${b.name}, ${tail}` : '', b.name].filter((q, i, a) => q && a.indexOf(q) === i);
-    for (const q of queries) {
+    // Google's address read when the link was pasted is kept, so the link opener isn't asked twice
+    const known = b.linkText || b.text || '';
+    const link = known ? { at: coordsFromLink(b.maps), text: known } : b.maps ? await resolveLink(b.maps) : { at: null, text: '' };
+    if (b.maps && link.text && !b.linkText && !p.manual) b.linkText = link.text;
+    const text = link.text || (b.address ? [b.name, b.address].filter(Boolean).join(', ') : '');
+    if (!link.at && !text) return null;
+    const cc0 = guessCC(`${text} ${b.address || ''}`);
+    let geo = { key, text, cc: cc0, label: '' };
+    if (link.at) {
+      const r = await reverseCC(link.at);
+      geo = { ...geo, ...link.at, cc: r.cc || cc0, label: r.label || '' };
+    } else {
+      // the exact spot from the address, only when the free map has that very street in the right country
+      const addr = (link.text || b.address || '').replace(new RegExp(`^${(b.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')},?\s*`, 'i'), '');
+      const streets = addr.split(',').map(x => plain(x.replace(/^[\w-]*\d[\w-]*\s+/, ''))).filter(x => x.length >= 5 && /[a-z]/.test(x));
       try {
-        const feats = (await (await withTimeout(`https://photon.komoot.io/api/?q=${encodeURIComponent(q.slice(0, 180))}&limit=5&lang=en`, 8000)).json()).features || [];
-        const ok = feats.find(f => {
-          if (!places.length) return true;
-          // strict: the result must name a real place from the address (a city, area or country of 4+ letters)
-          const pr = f.properties || {}, hay = plain([pr.name, pr.street, pr.district, pr.locality, pr.city, pr.county, pr.state, pr.country].join(' '));
-          const theirs = [pr.city, pr.district, pr.locality, pr.county, pr.state, pr.country].map(plain).filter(x => x.length >= 4);
-          const cc = guessCC(b.address + ' ' + b.name);
-          if (cc && pr.countrycode && pr.countrycode.toLowerCase() !== cc) return false;
-          return places.some(w => hay.includes(w) || theirs.some(t => w.includes(t)));
+        const feats = (await (await withTimeout(`https://photon.komoot.io/api/?q=${encodeURIComponent(addr.slice(0, 180))}&limit=5&lang=en`, 8000)).json()).features || [];
+        const hit = feats.find(f => {
+          const pr = f.properties || {};
+          if (cc0 && (pr.countrycode || '').toLowerCase() !== cc0) return false;
+          if (!['house', 'street'].includes(pr.type)) return false;
+          const st = plain(pr.street || pr.name || '');
+          return st.length >= 5 && streets.some(w => w.includes(st) || st.includes(w));
         });
-        if (ok) { const [lon, lat] = ok.geometry.coordinates; b.geo = { key, lat, lon, cc: (ok.properties.countrycode || '').toLowerCase(), label: placeLabel(ok.properties) }; save(); return { ...p, ...b.geo }; }
-      } catch (e) { /* too slow or offline: try the next, simpler search */ }
+        if (hit) { const [lon, lat] = hit.geometry.coordinates; geo = { ...geo, lat, lon, cc: (hit.properties.countrycode || cc0).toLowerCase(), label: placeLabel(hit.properties) }; }
+      } catch (e) { /* no exact spot: Google Maps Search still works from the address */ }
     }
-    return null;
+    b.geo = geo; save();
+    return { ...p, ...geo };
   }
   // Ask several map servers at once; the first good answer wins, nobody waits more than 10 s
   const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
@@ -1512,65 +1534,51 @@
     }
     const p = places.find(p => p.id === handyCur);
     const live = () => handyCur === p.id && currentView() === 'handy';
-    let pt = null;
+    let info = null, pt = null;   // info: what's known about the place; pt: its exact spot, only when known
     const sosHtml = cc => cc ? `<div class="hsos"><div class="hhead">${icon('phone')}<b>Emergency numbers</b></div><div class="hsosr">${sosFor(cc).map(([l, n]) => `<a href="tel:${n}"><b>${n}</b><small>${esc(l)}</small></a>`).join('')}</div></div>` : '';
     const row = x => `<div class="hrow"><span><b>${esc(x.name)}</b><small>${fmtDist(x.d)} · ${walk(x.d)}${x.phone ? ` · <a href="tel:${esc(x.phone.replace(/[^\d+]/g, ''))}">${esc(x.phone)}</a>` : ''}</small></span>${mapLink({ place: { name: x.name, lat: x.lat, lon: x.lon } }, 'Map ↗', 'map')}</div>`;
-    // Google Maps Search: the web link searches the area by name (never the hotel name, which can match abroad);
-    // on phones a tap opens the Google Maps app centred on the exact spot from your link (see openGSearch)
-    const areaOf = () => pt?.label || p.address.split(',').map(x => x.trim()).filter(x => x && !/\d/.test(x)).slice(-3).join(', ') || p.address;
-    const gUrl = c => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${c[3]} near ${areaOf()}`)}`;
-    const gbtn = (c, cls) => `<a class="${cls}" href="${esc(gUrl(c))}" target="_blank" rel="noopener" data-gq="${esc(c[3])}"${pt ? ` data-at="${pt.lat},${pt.lon}"` : ''}>Google Maps Search</a>`;
-    const nearLine = () => {
-      $('#handyNear').innerHTML = pt ? `<span>Near: ${esc(pt.label || p.address || `${pt.lat.toFixed(4)}, ${pt.lon.toFixed(4)}`)}</span> · <button type="button" class="hlink" id="hWrong">Wrong place?</button>`
-        : `<span>Couldn't find ${esc(p.name)} on the map.</span> <button type="button" class="hlink" id="hWrong">Paste a map link</button>`;
-      $('#hWrong').onclick = () => openHandyLink(p);
-    };
-    // state: 'locating' | 'nomap' | 'busy' | list (partial or final)
-    const draw = (list, partial, state) => {
-      const cats = HANDY_CATS.map(c => {
-        const all = list ? list.filter(x => x.cat === c[0]).sort((a, b) => a.d - b.d) : null, near = all ? all.filter(x => x.d <= 1000).slice(0, 3) : [];
-        let body;
-        if (!all) body = `<div class="hfind">${state === 'locating' ? '<span class="hwait">Looking nearby…</span>' : 'Find one'} ${gbtn(c, 'btn small')}</div>`;
-        else if (near.length) body = near.map(row).join('') + `<div class="hmore">More options · ${gbtn(c, 'hlink')}</div>`;
-        else if (all.length) body = `<div class="hnone">None found within 1 km</div><div class="hfind">Find one closer ${gbtn(c, 'btn small')}</div>${row(all[0])}`;
-        else body = `<div class="hnone">None found ${partial ? 'within 1 km' : 'nearby'}</div><div class="hfind">${partial ? 'Find one closer' : 'Find one'} ${gbtn(c, 'btn small')}</div>${partial ? '<div class="hnone hwait">Looking further…</div>' : ''}`;
-        return `<div class="hcat"><div class="hhead"><b>${c[1]}</b></div>${body}</div>`;
-      }).join('');
-      const note = state === 'busy' ? `<div class="hcard"><p><b>The map server is busy right now.</b></p><p class="muted">Google Maps Search still works. Once loaded, nearby places are saved for offline use.</p><button type="button" class="btn small" id="hRetry">Try again</button></div>` : '';
-      const cc = pt?.cc || guessCC(`${p.address} ${p.name}`);
-      box.innerHTML = sosHtml(cc) + note + cats + (list && !partial ? `<div class="hfoot">${p.manual ? `<button type="button" class="linkbtn" id="hRemove">Remove ${esc(p.name)}</button>` : ''}<button type="button" class="linkbtn" id="hRefresh">Refresh list</button><p class="attr">Map data © OpenStreetMap contributors. Some smaller places may be missing: use Google Maps Search to find more.</p></div>`
-        : p.manual ? `<div class="hfoot"><button type="button" class="linkbtn" id="hRemove">Remove ${esc(p.name)}</button></div>` : '');
+    // Google Maps Search: plain words Google understands, "pharmacy near <Google's address from the link, or the booking's name and address>"
+    const words = () => info?.text || [p.name, p.address].filter(Boolean).join(', ');
+    const gbtn = (c, cls) => `<a class="${cls}" href="${esc(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${c[3]} near ${words()}`)}`)}" target="_blank" rel="noopener">Google Maps Search</a>`;
+    const cats = (list, partial) => HANDY_CATS.map(c => {
+      const all = list ? list.filter(x => x.cat === c[0]).sort((a, b) => a.d - b.d) : null, near = all ? all.filter(x => x.d <= 1000).slice(0, 3) : [];
+      let body;
+      if (!all) body = `<div class="hfind">${partial ? '<span class="hwait">Looking nearby…</span>' : 'Find one'} ${gbtn(c, 'btn small')}</div>`;
+      else if (near.length) body = near.map(row).join('') + `<div class="hmore">More options · ${gbtn(c, 'hlink')}</div>`;
+      else if (all.length) body = `<div class="hnone">None found within 1 km</div><div class="hfind">Find one closer ${gbtn(c, 'btn small')}</div>${row(all[0])}`;
+      else body = `<div class="hnone">None found ${partial ? 'within 1 km' : 'nearby'}</div><div class="hfind">${partial ? 'Find one closer' : 'Find one'} ${gbtn(c, 'btn small')}</div>${partial ? '<div class="hnone hwait">Looking further…</div>' : ''}`;
+      return `<div class="hcat"><div class="hhead"><b>${c[1]}</b></div>${body}</div>`;
+    }).join('');
+    const foot = full => `<div class="hfoot">${p.manual ? `<button type="button" class="linkbtn" id="hRemove">Remove ${esc(p.name)}</button>` : ''}${full ? '<button type="button" class="linkbtn" id="hRefresh">Refresh list</button>' : ''}<p class="attr">${full ? 'Map data © OpenStreetMap contributors. Some smaller places may be missing: use Google Maps Search to find more.' : ''}</p></div>`;
+    const wire = () => {
       const rf = $('#hRefresh'); if (rf) rf.onclick = () => { localStorage.removeItem(`xkk-handy2-${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`); renderHandy(); };
       const rm = $('#hRemove'); if (rm) rm.onclick = () => { trip.handy = (trip.handy || []).filter(x => x.id !== p.id); handyCur = null; save(); renderHandy(); toast('Removed'); };
       const rt = $('#hRetry'); if (rt) rt.onclick = renderHandy;
+      const ask = $('#hAsk'); if (ask) ask.onclick = () => openHandyLink(p);
     };
+    const cc = () => info?.cc || guessCC(`${p.address} ${p.name}`);
+    const draw = (list, partial, note = '') => { box.innerHTML = sosHtml(cc()) + note + cats(list, partial) + foot(!!list && !partial); wire(); };
+
     $('#handyNear').innerHTML = '<span class="hwait">Finding it on the map…</span>';
-    draw(null, true, 'locating');
-    pt = await locate(p);
+    box.innerHTML = sosHtml(cc());
+    info = await locate(p);
     if (!live()) return;
-    nearLine();
-    if (!pt) return draw(null, false, 'nomap');
-    draw(null, true, 'locating');
+    // nothing to go on: no map link and no address
+    if (!info) {
+      $('#handyNear').innerHTML = '';
+      box.innerHTML = sosHtml(cc()) + `<div class="hcard hask"><p><b>We need to know where ${esc(p.name)} is.</b></p><button type="button" class="btn primary" id="hAsk">Paste a map link or coordinates</button></div>` + foot(false);
+      return wire();
+    }
+    pt = info.lat != null ? info : null;
+    $('#handyNear').innerHTML = `<span>${pt ? `Near: ${esc(info.label || info.text)}` : `Searching near: ${esc(info.text)}`}</span> · <button type="button" class="hlink" id="hWrong">Wrong place?</button>`;
+    $('#hWrong').onclick = () => openHandyLink(p);
+    if (!pt) return draw(null, false, `<div class="hcard"><p class="muted" style="margin:0">Paste a map link with the exact spot (or coordinates) under "Wrong place?" to also see the nearest places with distances.</p></div>`);
+    draw(null, true);
     try {
       const list = await nearby(pt, near => { if (live()) draw(near, true); });
       if (live()) draw(list, false);
-    } catch (e) { if (live()) draw(null, false, 'busy'); }
+    } catch (e) { if (live()) draw(null, false, `<div class="hcard"><p><b>The map server is busy right now.</b></p><p class="muted">Google Maps Search still works. Once loaded, nearby places are saved for offline use.</p><button type="button" class="btn small" id="hRetry">Try again</button></div>`); }
   }
-  // Tap on Google Maps Search: open the maps app itself, searching around the exact coordinates.
-  // iPhone: comgooglemaps:// (Google Maps app), Android: geo:. If the app doesn't open, the area-name web search does.
-  $('#handyBody').addEventListener('click', e => {
-    const a = e.target.closest('a[data-gq]'); if (!a || !a.dataset.at) return;
-    const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/i.test(ua) || (/Mac/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/i.test(ua);
-    const [lat, lon] = a.dataset.at.split(','), q = encodeURIComponent(a.dataset.gq);
-    if (!ios && !android) { e.preventDefault(); window.open(`https://www.google.com/maps/search/${q}/@${lat},${lon},15z`, '_blank', 'noopener'); return; }
-    e.preventDefault();
-    const web = a.href;
-    let left = false; const onHide = () => { left = true; };
-    document.addEventListener('visibilitychange', onHide, { once: true });
-    location.href = ios ? `comgooglemaps://?q=${q}&center=${lat},${lon}&zoom=15` : `geo:${lat},${lon}?q=${q}`;
-    setTimeout(() => { document.removeEventListener('visibilitychange', onHide); if (!left && !document.hidden) window.open(web, '_blank', 'noopener'); }, 1500);
-  });
-
   // One drawer for "Add place" (p = null) and "Wrong place?" (p = the place to fix),
   // the same as an itinerary item's location: search a place, or paste a link instead
   let linkFor = null;
@@ -1598,7 +1606,7 @@
   async function placeAt(at, url, name, label, cc) {
     if (linkFor) {
       const target = linkFor.stay || linkFor.src;
-      target.maps = url || gmaps(at);
+      target.maps = url || gmaps(at); delete target.linkText;
       if (linkFor.manual) Object.assign(target, at, { cc: cc || '', address: target.address || label || '' });
       else { const key = `v4|${target.name || ''}|${target.address || ''}|${target.maps}`; target.geo = { key, ...at, cc: cc || guessCC(`${target.address} ${target.name}`), label: label || '' }; }
       save(); hide(); renderHandy(); if (!linkFor.manual) renderBookings(); toast('Location saved');
@@ -1615,18 +1623,20 @@
     if (!raw) { err.textContent = 'Paste a map link first.'; err.hidden = false; return; }
     const url = /[a-z]/i.test(raw) ? normaliseUrl(raw) : '';   // plain coordinates have no link
     const btn = $('#hlForm button[type=submit]'); btn.disabled = true; btn.textContent = 'Opening link…';
-    const at = coordsFromLink(raw) || await linkCoords(url);
+    const link = coordsFromLink(raw) ? { at: coordsFromLink(raw), text: '' } : await resolveLink(url);
     btn.disabled = false; btn.textContent = 'Save';
-    if (at) { const r = await reverseCC(at); return placeAt(at, url || gmaps(at), name || r.label?.split(',')[0], r.label, r.cc); }
-    // a short share link: keep it for the Map button, find the place by its name
+    if (link.at) { const r = await reverseCC(link.at); return placeAt(link.at, url || gmaps(link.at), name || link.text.split(',')[0] || r.label?.split(',')[0], r.label, r.cc); }
+    if (!link.text) { err.textContent = 'Couldn’t read a location from that link. Try again, or paste coordinates (press and hold on the place in Google Maps, then copy the numbers at the top).'; err.hidden = false; return; }
+    // a share link: Google's own name and address for the place
     if (linkFor) {
-      const target = linkFor.stay || linkFor.src; target.maps = url; delete target.geo;
-      if (linkFor.manual) { delete target.lat; delete target.lon; }
-      save(); hide(); renderHandy(); if (!linkFor.manual) renderBookings(); toast('Link saved');
+      const target = linkFor.stay || linkFor.src; target.maps = url; delete target.geo; target.linkText = link.text;
+      if (linkFor.manual) { delete target.lat; delete target.lon; target.text = link.text; target.address = target.address || link.text; }
+      save(); hide(); renderHandy(); if (!linkFor.manual) renderBookings(); toast('Location saved');
       return;
     }
-    if (!name) { err.textContent = 'Add a name for this place so it can be found on the map.'; err.hidden = false; $('#hlName').focus(); return; }
-    placeAt(null, url, name, '', '');
+    const id = uid(), nm = name || link.text.split(',')[0];
+    (trip.handy ||= []).push({ id, name: nm, address: link.text.split(',').slice(1).join(',').trim(), maps: url, text: link.text, cc: guessCC(link.text) });
+    handyCur = id; save(); hide(); renderHandy();
   });
 
   /* ---------- routing ---------- */
