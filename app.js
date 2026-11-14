@@ -1362,230 +1362,43 @@
   // Floating + on Bookings: same as the Add booking button at the top
   $('#bookFab').onclick = () => $('#addBooking').click();
 
-  /* ---------- Handy: useful places near each place you stay ---------- */
-  // Map data © OpenStreetMap contributors, via Overpass (nearby places) and Photon (finding the hotel)
-  // [id, label, icon, Google search words]
-  const HANDY_CATS = [
-    ['conv', 'Convenience store', 'store', 'convenience store'],
-    ['pharm', 'Pharmacy', 'pill', 'pharmacy'],
-    ['clinic', 'Clinic & hospital', 'cross', 'clinic'],
-    ['police', 'Police', 'shield', 'police station'],
-    ['cash', 'ATM & money changer', 'cash', 'atm'],
-    ['super', 'Supermarket', 'cart', 'supermarket'],
-    ['laundry', 'Laundry', 'shirt', 'laundry'],
-    ['fuel', 'Petrol station', 'fuel', 'petrol station'],
-  ];
-  // Emergency numbers for every country (tap to call), from Wikipedia's "List of emergency telephone numbers", Nov 2026
-  const SOS = {"dz":[["Police","1548"],["Ambulance","14"],["Gendarme","1055"]],"ao":[["Police","113"],["Ambulance","112/116"],["Fire","115"]],"ac":[["Emergency","999"]],"bj":[["Police","117"],["Ambulance","112"],["Fire","118"]],"bi":[["Police","117"],["Ambulance","112"],["Fire","118"]],"bw":[["Police","999"],["Ambulance","997"],["Fire","998"],["From a mobile","112"]],"bf":[["Police","17"],["Ambulance","112"],["Fire","18"]],"cm":[["Emergency","112"],["Police","117"],["Ambulance","119"],["Fire","118"]],"cv":[["Police","132"],["Ambulance","130"],["Fire","131"]],"cf":[["Police","117"],["Ambulance","1220"],["Fire","118"]],"td":[["Police","17"],["Ambulance","2251-4242"],["Fire","18"]],"km":[["Police","17"],["Ambulance","772-03-73"],["Fire","18"]],"cg":[["Police","117"],["Fire","118"]],"cd":[["Police","112"],["Fire","118"]],"dj":[["Police","17"],["Ambulance","19"],["Fire","18"]],"eg":[["Police","122"],["Ambulance","123"],["Fire","180"],["Tourist police","126"]],"gq":[["Police","114"],["Ambulance","115"],["Fire","112"]],"er":[["Police","113"],["Ambulance","114"],["Fire","116"],["Emergency (all)","112"]],"sz":[["Police","999"],["Ambulance","977"],["Fire","933"]],"et":[["Emergency","911"],["Police","991"],["Ambulance","907"],["Fire","939"]],"ga":[["Police","1730"],["Ambulance","1300"],["Fire","18"]],"gm":[["Police","117"],["Ambulance","116"],["Fire","118"]],"gh":[["Emergency","112"],["Police","191"],["Ambulance","193"],["Fire","192"]],"gn":[["Police","117"],["Ambulance","18"],["Fire","442-020"]],"gw":[["Emergency","112"],["Police","117"],["Ambulance","119"],["Fire","118"]],"ci":[["Police","110"],["Ambulance","185"],["Fire","180"]],"lr":[["Emergency","911"]],"ke":[["Emergency","999"],["Also works","112"]],"ly":[["Emergency","1515"],["Ambulance","193"]],"ls":[["Police","123"],["Ambulance","121"],["Fire","122"]],"mg":[["Police","117"],["Ambulance","124"],["Fire","118"]],"mw":[["Police","997"],["Ambulance","998"],["Fire","999"]],"ml":[["Police","17"],["Ambulance","15"],["Fire","18"],["Also works","112"]],"mr":[["Police","117"],["Ambulance","101"],["Fire","118"]],"mu":[["Police","112"],["Ambulance","114"],["Fire","115"],["Police","999"]],"yt":[["Emergency","112"],["Police","17"],["Ambulance","15"],["Fire","18"]],"ma":[["Police","19"],["Ambulance","15"],["Gendarmerie","177"],["From a mobile","112"]],"mz":[["Police","119"],["Ambulance","117"],["Fire","198"]],"na":[["Emergency","10111"]],"ne":[["Police","17"],["Ambulance","15"],["Fire","18"]],"ng":[["Emergency","112"]],"re":[["Emergency","112"],["Police","17"],["Ambulance","15"],["Fire","18"]],"rw":[["Police","112"],["Ambulance","912"],["Fire","112"]],"sh":[["Emergency","999"]],"st":[["Emergency","112"]],"sn":[["Police","17"],["Ambulance","18"],["Fire","1515"]],"sc":[["Emergency","999"],["Also works","112"]],"sl":[["Police","019"],["Ambulance","999"]],"so":[["Police","888"],["Ambulance","999"],["Fire","555"]],"za":[["Police","10111"],["Ambulance","10177"],["From a mobile","112"]],"sd":[["Emergency","999"]],"ss":[["Emergency","999"]],"tz":[["Police","112"],["Ambulance","114"],["Fire","115"]],"tg":[["Police","117"],["Ambulance","8200"],["Fire","118"]],"tn":[["Police","197"],["Ambulance","190"],["Fire","198"]],"ug":[["Police","112"],["Ambulance","911"],["Fire","112"],["Also works","999"]],"eh":[["Emergency","150"]],"zm":[["Emergency","999"],["Police","911"],["Ambulance","992"],["Fire","993"]],"zw":[["Emergency","999"],["Police","995"],["Ambulance","994"],["Fire","993"]],"ai":[["Emergency","911"]],"ag":[["Emergency","911"],["Also works","999"]],"aw":[["Emergency","911"]],"bs":[["Emergency","911"],["Also works","919"]],"bb":[["Police","211"],["Ambulance","511"],["Fire","311"]],"bm":[["Emergency","911"]],"vg":[["Emergency","911"],["Also works","999"]],"bq":[["Emergency","911"]],"ky":[["Emergency","911"]],"cu":[["Police","106"],["Ambulance","104"],["Fire","105"]],"cw":[["Police","911"],["Ambulance","912"],["Fire","911"]],"dm":[["Emergency","999"]],"do":[["Emergency","911"]],"gd":[["Emergency","911"]],"gp":[["Emergency","112"],["Police","17"],["Ambulance","15"],["Fire","18"]],"ht":[["Police","114"],["Ambulance","116"],["Fire","115"]],"jm":[["Police","119"],["Ambulance & fire","110"]],"mq":[["Emergency","112"],["Police","17"],["Ambulance","15"],["Fire","18"]],"ms":[["Emergency","911"],["Also works","999"]],"pr":[["Emergency","911"]],"bl":[["Police","17"],["Fire","18"]],"kn":[["Emergency","911"]],"lc":[["Emergency","911"],["Also works","999"]],"mf":[["Police","17"],["Ambulance","15"],["Fire","18"]],"vc":[["Emergency","999"],["Also works","911"]],"sx":[["Police","911"],["Ambulance","912"],["Fire","919"]],"tt":[["Police","999"],["Ambulance","811"],["Fire","990"]],"tc":[["Emergency","911"]],"vi":[["Emergency","911"]],"bz":[["Emergency","911"]],"cr":[["Emergency","911"]],"sv":[["Police","911"],["Ambulance","132"],["Fire","913"]],"gt":[["Police","110"],["Ambulance","122"],["Fire","123"]],"hn":[["Police","911"],["Ambulance","195"],["Fire","198"]],"ni":[["Police","118"],["Ambulance","128"],["Fire","115"]],"pa":[["Emergency","911"],["Police","104"],["Fire","103"]],"ca":[["Emergency","911"]],"mx":[["Emergency","911"]],"pm":[["Emergency","112"],["Police","17"],["Ambulance","15"],["Fire","18"]],"us":[["Emergency","911"]],"ar":[["Emergency","911"],["Police","101"],["Ambulance","107"],["Fire","100"]],"bo":[["Emergency","911"],["Police","110"],["Ambulance","118"],["Fire","119"]],"br":[["Police","190"],["Ambulance","192"],["Fire","193"]],"cl":[["Police","133"],["Ambulance","131"],["Fire","132"]],"co":[["Emergency","123"],["Police","112"],["Ambulance","125"],["Fire","119"]],"ec":[["Emergency","911"]],"fk":[["Emergency","999"],["Also works","112"]],"gf":[["Emergency","112"],["Police","17"],["Ambulance","15"],["Fire","18"]],"gy":[["Police","911"],["Ambulance","913"],["Fire","912"]],"py":[["Emergency","911"]],"pe":[["Emergency","911"],["Police","105"],["Ambulance","106"],["Fire","116"]],"sr":[["Emergency","115"],["Ambulance","113"],["Fire","110"]],"uy":[["Emergency","911"]],"ve":[["Emergency","911"]],"af":[["Police","119"],["Ambulance","112"],["Fire","119"]],"bh":[["Emergency","999"]],"bd":[["Emergency","999"]],"bt":[["Police","113"],["Ambulance","112"],["Fire","110"]],"io":[["Emergency","999"],["Also works","112"]],"bn":[["Police","993"],["Ambulance","991"],["Fire","995"]],"kh":[["Police","117"],["Ambulance","119"],["Fire","118"]],"cn":[["Police","110"],["Ambulance","120"],["Fire","119"]],"cx":[["Emergency","000"]],"cc":[["Emergency","000"]],"tl":[["Emergency","112"]],"hk":[["Emergency","999"]],"in":[["Emergency","112"],["Police","100"],["Ambulance","108"],["Fire","101"]],"id":[["Emergency","112"],["Police","110"],["Ambulance","118"],["Fire","113"]],"ir":[["Police","110"],["Ambulance","115"],["Fire","125"]],"iq":[["Emergency","112"],["Police","104"],["Ambulance","122"],["Fire","115"]],"il":[["Police","100"],["Ambulance","101"],["Fire","102"]],"jp":[["Police","110"],["Ambulance & fire","119"]],"jo":[["Emergency","911"]],"kz":[["Emergency","112"],["Police","102"],["Ambulance","103"],["Fire","101"]],"kr":[["Police","112"],["Ambulance & fire","119"]],"kw":[["Emergency","112"]],"kg":[["Emergency","112"]],"la":[["Police","191"],["Ambulance","195"],["Fire","190"]],"lb":[["Police","112"],["Ambulance","140"],["Fire","175"]],"mo":[["Emergency","999"]],"my":[["Emergency","999"],["Fire","994"],["From a mobile","112"]],"mv":[["Emergency","911"],["Police","119"],["Ambulance","102"],["Fire","118"]],"mn":[["Emergency","105"],["Police","102"],["Ambulance","103"],["Fire","101"]],"mm":[["Emergency","999"],["Police","199"],["Ambulance","192"],["Fire","191"]],"np":[["Police","100"],["Ambulance","102"],["Fire","101"]],"om":[["Emergency","9999"]],"pk":[["Police","15"],["Ambulance","1122"],["Fire","16"]],"ps":[["Police","100"],["Ambulance","101"],["Fire","102"]],"ph":[["Emergency","911"]],"qa":[["Emergency","999"]],"sa":[["Emergency","911"],["Police","999"],["Ambulance","997"],["Fire","998"]],"sg":[["Police","999"],["Ambulance & fire","995"]],"lk":[["Police","119"],["Ambulance & fire","110"]],"sy":[["Police","112"],["Ambulance","110"],["Fire","113"]],"tw":[["Police","110"],["Ambulance & fire","119"]],"tj":[["Emergency","112"]],"th":[["Police","191"],["Ambulance","1669"],["Fire","199"],["Tourist police","1155"]],"tr":[["Emergency","112"]],"tm":[["Police","02"],["Ambulance","03"],["Fire","01"]],"ae":[["Police","999"],["Ambulance","998"],["Fire","997"]],"uz":[["Police","102"],["Ambulance","103"],["Fire","101"],["Emergency (all)","112"]],"vn":[["Police","113"],["Ambulance","115"],["Fire","114"]],"ye":[["Police","194"],["Ambulance","191"]],"ax":[["Emergency","112"]],"al":[["Police","129"],["Ambulance","127"],["Fire","128"],["Emergency (all)","112"]],"ad":[["Police","110"],["Ambulance","116"],["Fire","118"],["Emergency (all)","112"]],"am":[["Emergency","112"]],"at":[["Police","133"],["Ambulance","144"],["Fire","122"],["Emergency (all)","112"]],"az":[["Police","102"],["Ambulance","103"],["Fire","101"],["Emergency (all)","112"]],"by":[["Police","102"],["Ambulance","103"],["Fire","101"]],"be":[["Emergency","112"],["Police","101"]],"ba":[["Police","122"],["Ambulance","124"],["Fire","123"]],"bg":[["Emergency","112"]],"hr":[["Emergency","112"]],"cy":[["Emergency","112"]],"cz":[["Emergency","112"]],"dk":[["Emergency","112"]],"ee":[["Emergency","112"]],"fo":[["Emergency","112"]],"fi":[["Emergency","112"]],"fr":[["Police","17"],["Ambulance","15"],["Fire","18"],["Emergency (all)","112"]],"ge":[["Emergency","112"]],"de":[["Police","110"],["Ambulance & fire","112"]],"gi":[["Emergency","112"]],"gr":[["Emergency","112"],["Police","100"],["Ambulance","166"],["Fire","199"]],"gl":[["Emergency","112"]],"gg":[["Emergency","999"],["Also works","112"]],"hu":[["Emergency","112"]],"is":[["Emergency","112"]],"ie":[["Emergency","112"],["Also works","999"]],"im":[["Emergency","999"],["Also works","112"]],"it":[["Emergency","112"]],"je":[["Emergency","999"],["Also works","112"]],"xk":[["Police","192"],["Ambulance","194"],["Fire","193"]],"lv":[["Emergency","112"]],"lt":[["Emergency","112"]],"li":[["Police","117"],["Ambulance","144"],["Fire","118"],["Emergency (all)","112"]],"lu":[["Emergency","112"]],"mt":[["Emergency","112"]],"md":[["Emergency","112"]],"mc":[["Police","17"],["Ambulance & fire","18"],["Emergency (all)","112"]],"me":[["Emergency","112"]],"nl":[["Emergency","112"]],"mk":[["Emergency","112"]],"no":[["Police","112"],["Ambulance","113"],["Fire","110"]],"pl":[["Emergency","112"]],"pt":[["Emergency","112"]],"ro":[["Emergency","112"]],"ru":[["Emergency","112"],["Police","102"],["Ambulance","103"],["Fire","101"]],"sm":[["Emergency","112"]],"rs":[["Police","192"],["Ambulance","194"],["Fire","193"],["Emergency (all)","112"]],"sk":[["Emergency","112"]],"si":[["Police","113"],["Ambulance & fire","112"]],"es":[["Emergency","112"]],"se":[["Emergency","112"]],"ch":[["Police","117"],["Ambulance","144"],["Fire","118"],["Emergency (all)","112"]],"ua":[["Emergency","112"],["Police","102"],["Ambulance","103"],["Fire","101"]],"gb":[["Emergency","999"],["Also works","112"]],"va":[["Emergency","112"]],"as":[["Emergency","911"]],"au":[["Emergency","000"],["From a mobile","112"]],"ck":[["Emergency","999"]],"fj":[["Emergency","911"]],"pf":[["Emergency","112"],["Police","17"],["Ambulance","15"],["Fire","18"]],"gu":[["Emergency","911"]],"ki":[["Emergency","999"]],"mh":[["Emergency","911"]],"fm":[["Emergency","911"]],"nr":[["Police","110"],["Ambulance","111"],["Fire","112"]],"nc":[["Emergency","112"],["Police","17"],["Ambulance","15"],["Fire","18"]],"nz":[["Emergency","111"]],"mp":[["Emergency","911"]],"pw":[["Emergency","911"]],"pg":[["Police","112"],["Ambulance","111"],["Fire","110"]],"ws":[["Emergency","999"]],"sb":[["Emergency","999"],["Ambulance","111"],["Fire","988"]],"to":[["Emergency","911"]],"tv":[["Emergency","911"]],"vu":[["Police","111"],["Ambulance","112"],["Fire","113"]],"wf":[["Emergency","15"]]};
-  const sosFor = cc => SOS[cc] || [['Emergency (most mobiles)', '112']];
-  const distM = (a, b) => { const R = 6371e3, r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lon - a.lon) * r;
-    const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
-  const fmtDist = m => m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`;
-  const walk = m => `${Math.max(1, Math.round(m / 80))} min walk`;
-  let handyCur = null;
-  const plain = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  // The places to look around: stays in Bookings, then any added by hand
-  function handyPlaces() {
-    // the same hotel twice (two stays, or "Hôtel" vs "Hotel") shows once, keeping the accented spelling
-    const stays = [];
-    trip.bookings.filter(b => b.kind === 'stay' && (b.name || b.address)).forEach(b => {
-      const p = { id: b.id, name: b.name || b.address, address: b.address || '', maps: b.maps || '', stay: b };
-      const same = stays.find(q => (b.name && plain(q.name) === plain(b.name)) || (b.address && plain(q.address) === plain(b.address)));
-      if (!same) return stays.push(p);
-      if (/[^\x00-\x7f]/.test(p.name) && !/[^\x00-\x7f]/.test(same.name)) same.name = p.name;
-      if (!same.maps && p.maps) { same.maps = p.maps; same.stay = b; }
-    });
-    return [...stays, ...(trip.handy || []).map(p => ({ ...p, manual: true, src: p }))];
+  /* ---------- Add to Home Screen (like the KuArts app) ---------- */
+  // Shows in the browser until the app is installed. "Not now" hides it for 7 days; ?install shows it straight away.
+  let installEvt = null;
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; });
+  addEventListener('appinstalled', () => { hide(); toast('Added to your Home Screen'); });
+  function installPrompt() {
+    const ua = navigator.userAgent;
+    const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    const forced = new URLSearchParams(location.search).has('install');
+    if (standalone) return;
+    const ios = /iPhone|iPad|iPod/i.test(ua) || (/Mac/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/i.test(ua);
+    // inside Instagram, Facebook, WhatsApp, TikTok and the like, installing isn't possible
+    const inApp = /FBAN|FBAV|FB_IAB|Instagram|Line\/|WhatsApp|Messenger|TikTok|musical_ly|Twitter|LinkedInApp|Snapchat|Pinterest|GSA\//i.test(ua);
+    let snooze = 0; try { snooze = +localStorage.getItem('xkk-install-later') || 0; } catch (e) {}
+    if (!forced && (Date.now() < snooze || !(ios || android))) return;
+    const step = (n, html) => `<li><span class="n">${n}</span><span>${html}</span></li>`;
+    let body;
+    if (inApp) body = `<div class="inapp"><p><b>You're viewing this inside another app.</b> To install, open it in ${ios ? 'Safari' : 'Chrome'} first.</p>
+        <ol class="insteps">${step(1, `Tap ${icon('dots')} or ${icon('share')} in this app's menu`)}${step(2, `Choose <b>Open in ${ios ? 'Safari' : 'Browser'}</b>`)}</ol>
+        <button type="button" class="btn primary wide" id="inCopy">Copy link</button></div>`;
+    else if (ios) body = `<ol class="insteps">${step(1, `Tap <b>Share</b> ${icon('share')} ${/CriOS|FxiOS|EdgiOS/.test(ua) ? 'next to the address bar' : 'at the bottom of Safari'}`)}${step(2, `Scroll down and tap <b>Add to Home Screen</b> ${icon('addsq')}`)}${step(3, 'Tap <b>Add</b>')}</ol>`;
+    else body = `<button type="button" class="btn primary wide" id="inInstall">Install</button>
+        <ol class="insteps" id="inManual">${step(1, `Tap the menu ${icon('dots')} in your browser`)}${step(2, 'Tap <b>Add to Home screen</b> or <b>Install app</b>')}</ol>`;
+    $('#inBody').innerHTML = body;
+    const ib = $('#inInstall');
+    if (ib) { ib.style.display = installEvt ? '' : 'none'; $('#inManual').style.display = installEvt ? 'none' : ''; ib.onclick = async () => { if (!installEvt) return; installEvt.prompt(); const r = await installEvt.userChoice; installEvt = null; if (r.outcome === 'accepted') hide(); }; }
+    const cp = $('#inCopy');
+    if (cp) cp.onclick = () => { const u = location.origin + location.pathname; try { navigator.clipboard.writeText(u); toast('Link copied. Paste it in ' + (ios ? 'Safari' : 'Chrome')); } catch (e) { toast(u); } };
+    $('#inLater').onclick = () => { try { localStorage.setItem('xkk-install-later', Date.now() + 7 * 864e5); } catch (e) {} hide(); };
+    show('#installSheet');
+    if (forced) history.replaceState(null, '', location.pathname + location.hash);
   }
-  // A position from a pasted map link (Google, Waze, Apple). Short share links hide it.
-  const SHORT_LINK = /(goo\.gl|maps\.app|g\.co\/|waze\.com\/ul\/h|bit\.ly)/i;
-  function coordsFromLink(u) {
-    try { u = decodeURIComponent(u || ''); } catch (e) { u = u || ''; }
-    const plainC = u.match(/^\s*(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$/);   // "10.0285, 104.0255"
-    if (plainC) return { lat: +plainC[1], lon: +plainC[2] };
-    const m = u.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || u.match(/[?&](?:q|ll|query|daddr|sll|destination)=(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/) || u.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-    return m ? { lat: +m[1], lon: +m[2] } : null;
-  }
-  // Short share links (maps.app.goo.gl/…) are opened by your own small Cloudflare worker to find the coordinates
-  const LINK_OPENER = 'https://xkk-links.joliecodes.workers.dev/';
-  // What a link tells us: exact coordinates when it has them, and Google's own name and address for the place.
-  // Google answers the link opener with a "sorry" page, but the real destination is written inside it.
-  async function resolveLink(url) {
-    const direct = coordsFromLink(url);
-    if (direct || !url) return { at: direct, text: '' };
-    let full = url;
-    if (SHORT_LINK.test(url)) {
-      // your link opener opens the link and asks Google for the exact coordinates
-      try {
-        const r = await (await withTimeout(`${LINK_OPENER}?u=${encodeURIComponent(url)}`, 12000)).json();
-        if (r.lat != null) return { at: { lat: +r.lat, lon: +r.lon }, text: r.text || r.address || '' };
-        full = r.url || url;
-      } catch (e) { return { at: null, text: '' }; }
-    }
-    try { const u = new URL(full); if (/\/sorry\//.test(u.pathname) && u.searchParams.get('continue')) full = u.searchParams.get('continue'); } catch (e) {}
-    const at = coordsFromLink(full);
-    let text = '';
-    try {
-      const u = new URL(full);
-      text = u.searchParams.get('q') || u.searchParams.get('query') || u.searchParams.get('daddr') || '';
-      if (!text) { const m = u.pathname.match(/\/maps\/place\/([^/]+)/); if (m) text = decodeURIComponent(m[1]); }
-    } catch (e) {}
-    text = text.replace(/\+/g, ' ').trim();
-    if (/^-?\d+\.\d+\s*,\s*-?\d+\.\d+$/.test(text)) text = '';
-    return { at, text };
-  }
-  // exact coordinates for a typed or scanned address, from Google via the link opener
-  async function addressCoords(text) {
-    try { const r = await (await withTimeout(`${LINK_OPENER}?a=${encodeURIComponent(text)}`, 12000)).json(); return r.lat != null ? { lat: +r.lat, lon: +r.lon } : null; } catch (e) { return null; }
-  }
-  const withTimeout = (url, ms) => { const c = new AbortController(), t = setTimeout(() => c.abort(), ms); return fetch(url, { signal: c.signal }).finally(() => clearTimeout(t)); };
-  const placeLabel = pr => [pr.district || pr.locality, pr.city || pr.county, pr.state, pr.country].filter((v, i, a) => v && a.indexOf(v) === i).join(', ');
-  // Country words in an address, so emergency numbers can show before the map answers
-  // Country (and a few city) names, so the right emergency numbers show from an address alone
-  const CC_WORDS = {"united kingdom of great britain and northern ireland":"gb","south georgia and the south sandwich islands":"gs","saint helena ascension and tristan da cunha":"sh","macedonia the former yugoslav republic of":"mk","korea democratic people s republic of":"kp","congo the democratic republic of the":"cd","united states minor outlying islands":"um","heard island and mcdonald islands":"hm","lao people s democratic republic":"la","saint vincent and the grenadines":"vc","venezuela bolivarian republic of":"ve","bonaire sint eustatius and saba":"bq","bolivia plurinational state of":"bo","british indian ocean territory":"io","micronesia federated states of":"fm","french southern territories":"tf","tanzania united republic of":"tz","falkland islands malvinas":"fk","saint pierre and miquelon":"pm","central african republic":"cf","iran islamic republic of":"ir","northern mariana islands":"mp","saint martin french part":"mf","taiwan province of china":"tw","turks and caicos islands":"tc","united states of america":"us","sint maarten dutch part":"sx","bosnia and herzegovina":"ba","svalbard and jan mayen":"sj","virgin islands british":"vg","cocos keeling islands":"cc","saint kitts and nevis":"kn","sao tome and principe":"st","syrian arab republic":"sy","united arab emirates":"ae","antigua and barbuda":"ag","moldova republic of":"md","trinidad and tobago":"tt","dominican republic":"do","palestine state of":"ps","russian federation":"ru","virgin islands u s":"vi","brunei darussalam":"bn","equatorial guinea":"gq","korea republic of":"kr","wallis and futuna":"wf","christmas island":"cx","falkland islands":"fk","french polynesia":"pf","marshall islands":"mh","papua new guinea":"pg","saint barthelemy":"bl","solomon islands":"sb","american samoa":"as","cayman islands":"ky","czech republic":"cz","norfolk island":"nf","virgin islands":"vi","western sahara":"eh","united kingdom":"gb","aland islands":"ax","bouvet island":"bv","cocos islands":"cc","cote d ivoire":"ci","faroe islands":"fo","french guiana":"gf","guinea bissau":"gw","liechtenstein":"li","new caledonia":"nc","united states":"us","burkina faso":"bf","cook islands":"ck","saint helena":"sh","saint martin":"mf","saudi arabia":"sa","sierra leone":"sl","sint maarten":"sx","south africa":"za","turkmenistan":"tm","kuala lumpur":"my","afghanistan":"af","el salvador":"sv","isle of man":"im","netherlands":"nl","new zealand":"nz","philippines":"ph","puerto rico":"pr","saint lucia":"lc","south sudan":"ss","switzerland":"ch","timor leste":"tl","south korea":"kr","north korea":"kp","ivory coast":"ci","ho chi minh":"vn","antarctica":"aq","azerbaijan":"az","bangladesh":"bd","cabo verde":"cv","costa rica":"cr","guadeloupe":"gp","kazakhstan":"kz","kyrgyzstan":"kg","luxembourg":"lu","madagascar":"mg","martinique":"mq","mauritania":"mr","micronesia":"fm","montenegro":"me","montserrat":"ms","mozambique":"mz","san marino":"sm","seychelles":"sc","tajikistan":"tj","uzbekistan":"uz","cape verde":"cv","east timor":"tl","argentina":"ar","australia":"au","gibraltar":"gi","greenland":"gl","guatemala":"gt","hong kong":"hk","indonesia":"id","lithuania":"lt","macedonia":"mk","mauritius":"mu","nicaragua":"ni","palestine":"ps","singapore":"sg","sri lanka":"lk","swaziland":"sz","venezuela":"ve","melbourne":"au","anguilla":"ai","barbados":"bb","botswana":"bw","bulgaria":"bg","cambodia":"kh","cameroon":"cm","colombia":"co","djibouti":"dj","dominica":"dm","ethiopia":"et","guernsey":"gg","holy see":"va","honduras":"hn","kiribati":"ki","malaysia":"my","maldives":"mv","mongolia":"mn","pakistan":"pk","paraguay":"py","pitcairn":"pn","portugal":"pt","slovakia":"sk","slovenia":"si","suriname":"sr","tanzania":"tz","thailand":"th","viet nam":"vn","zimbabwe":"zw","scotland":"gb","eswatini":"sz","phu quoc":"vn","bordeaux":"fr","langkawi":"my","albania":"al","algeria":"dz","andorra":"ad","armenia":"am","austria":"at","bahamas":"bs","bahrain":"bh","belarus":"by","belgium":"be","bermuda":"bm","bolivia":"bo","bonaire":"bq","burundi":"bi","comoros":"km","croatia":"hr","curacao":"cw","denmark":"dk","ecuador":"ec","eritrea":"er","estonia":"ee","finland":"fi","georgia":"ge","germany":"de","grenada":"gd","hungary":"hu","iceland":"is","ireland":"ie","jamaica":"jm","lebanon":"lb","lesotho":"ls","liberia":"lr","mayotte":"yt","moldova":"md","morocco":"ma","myanmar":"mm","namibia":"na","nigeria":"ng","reunion":"re","romania":"ro","senegal":"sn","somalia":"so","tokelau":"tk","tunisia":"tn","ukraine":"ua","uruguay":"uy","vanuatu":"vu","vietnam":"vn","czechia":"cz","england":"gb","america":"us","turkiye":"tr","vatican":"va","da nang":"vn","jakarta":"id","bangkok":"th","angola":"ao","belize":"bz","bhutan":"bt","brazil":"br","canada":"ca","cyprus":"cy","france":"fr","gambia":"gm","greece":"gr","guinea":"gn","guyana":"gy","israel":"il","jersey":"je","jordan":"jo","kuwait":"kw","latvia":"lv","malawi":"mw","mexico":"mx","monaco":"mc","norway":"no","panama":"pa","poland":"pl","rwanda":"rw","serbia":"rs","sweden":"se","taiwan":"tw","turkey":"tr","tuvalu":"tv","uganda":"ug","zambia":"zm","russia":"ru","brunei":"bn","kosovo":"xk","penang":"my","phuket":"th","london":"gb","sydney":"au","aruba":"aw","benin":"bj","chile":"cl","china":"cn","congo":"cd","egypt":"eg","gabon":"ga","ghana":"gh","haiti":"ht","india":"in","italy":"it","japan":"jp","kenya":"ke","korea":"kr","libya":"ly","macao":"mo","malta":"mt","nauru":"nr","nepal":"np","niger":"ne","palau":"pw","qatar":"qa","samoa":"ws","spain":"es","sudan":"sd","tonga":"to","yemen":"ye","syria":"sy","wales":"gb","macau":"mo","burma":"mm","hanoi":"vn","paris":"fr","tokyo":"jp","osaka":"jp","seoul":"kr","dubai":"ae","chad":"td","cuba":"cu","fiji":"fj","guam":"gu","iran":"ir","iraq":"iq","mali":"ml","niue":"nu","oman":"om","peru":"pe","togo":"tg","laos":"la","bali":"id","doha":"qa","usa":"us","uae":"ae","uk":"gb"};
-  const guessCC = t => { const s = plain(t); return Object.entries(CC_WORDS).find(([w]) => new RegExp(`\\b${w}\\b`).test(s))?.[1] || ''; };
-  async function reverseCC(pt) {
-    try { const f = (await (await withTimeout(`https://photon.komoot.io/reverse?lat=${pt.lat}&lon=${pt.lon}&lang=en`, 6000)).json()).features?.[0]; return f ? { cc: (f.properties.countrycode || '').toLowerCase(), label: placeLabel(f.properties) } : {}; } catch (e) { return {}; }
-  }
-  // The words Google Maps Search uses for a place, e.g. "Sunday Boutique Hotel, D2 38-40 Diamond 2, Phú Quốc, Vietnam".
-  // From the map link (Google's own address), else coordinates turned into an area name, else the booking's address.
-  // null when nothing is known: then the app asks for a link.
-  async function locate(p) {
-    const b = p.stay || p.src || p;
-    const key = `v7|${b.name || ''}|${b.address || ''}|${b.maps || ''}|${b.lat ?? ''}`;
-    if (b.geo && b.geo.key === key) return b.geo;
-    let text = b.linkText || b.text || '', cc = '', at = b.lat != null ? { lat: b.lat, lon: b.lon } : null;
-    if (b.maps && !at) {
-      const l = await resolveLink(b.maps);
-      if (l.at) at = l.at;
-      if (!text && l.text) text = l.text;
-      if (text) b.linkText = text;
-    }
-    if (!text && b.address) text = [b.name, b.address].filter(Boolean).join(', ');
-    if (!at && b.address) at = await addressCoords(b.address);
-    if (at && !text) { const r = await reverseCC(at); text = r.label || `${at.lat}, ${at.lon}`; cc = r.cc || ''; }
-    if (!text && !at) return null;
-    b.geo = { key, text, cc: cc || b.cc || guessCC(`${text} ${b.address || ''}`), ...(at || {}) }; save();
-    return b.geo;
-  }
-  async function renderHandy() {
-    const places = handyPlaces(), box = $('#handyBody');
-    if (!places.some(p => p.id === handyCur)) handyCur = places[0]?.id || null;
-    $('#handyTabs').innerHTML = places.map(p => `<button type="button" data-id="${p.id}" class="${p.id === handyCur ? 'on' : ''}">${icon(p.manual ? 'pin' : 'hotel')}<span>${esc(p.name)}</span></button>`).join('')
-      + `<button type="button" class="add" id="handyAdd">${icon('plus')}<span>Add place</span></button>`;
-    $('#handyTabs').querySelectorAll('[data-id]').forEach(b => b.onclick = () => { handyCur = b.dataset.id; renderHandy(); });
-    $('#handyAdd').onclick = () => openHandyLink(null);
-    if (!places.length) {
-      $('#handyNear').innerHTML = '';
-      box.innerHTML = `<div class="empty"><div class="big">${icon('hotel')}</div><p><b>Where are you staying?</b></p><p class="muted">Add a stay in Bookings, or tap Add place, to see the nearest convenience stores, pharmacies, clinics and police.</p></div>`;
-      return;
-    }
-    const p = places.find(p => p.id === handyCur);
-    const live = () => handyCur === p.id && currentView() === 'handy';
-    const sosHtml = cc => cc ? `<div class="hsos"><div class="hhead">${icon('phone')}<b>Emergency numbers</b></div><div class="hsosr">${sosFor(cc).map(([l, n]) => `<a href="tel:${n}"><b>${n}</b><small>${esc(l)}</small></a>`).join('')}</div></div>` : '';
-    const foot = () => p.manual ? `<div class="hfoot"><button type="button" class="linkbtn" id="hRemove">Remove ${esc(p.name)}</button></div>` : '';
-    const wire = () => {
-      const rm = $('#hRemove'); if (rm) rm.onclick = () => { trip.handy = (trip.handy || []).filter(x => x.id !== p.id); handyCur = null; save(); renderHandy(); toast('Removed'); };
-      const ask = $('#hAsk'); if (ask) ask.onclick = () => openHandyLink(p);
-    };
-    // Each tile opens the stay itself in Google Maps (its map link, else its coordinates, else its name and address)
-    // and copies the search word, so you paste it there and Google searches around the stay
-    const b1 = p.stay || p.src || p;
-    const placeUrl = info => b1.maps || (b1.lat != null ? gmaps(b1) : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(info.text)}`);
-    // With exact coordinates: one tap searches right around the stay (Apple Maps on iPhone, Google Maps elsewhere).
-    // Without: open the stay in Google Maps and copy the word to search there.
-    const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/i.test(ua) || (/Mac/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/i.test(ua);
-    const exactUrl = (word, at) => ios ? `https://maps.apple.com/?q=${encodeURIComponent(word)}&sll=${at.lat},${at.lon}&z=15`
-      : android ? `geo:${at.lat},${at.lon}?q=${encodeURIComponent(word)}` : `https://www.google.com/maps/search/${encodeURIComponent(word)}/@${at.lat},${at.lon},15z`;
-    const tiles = info => {
-      const at = info.lat != null ? info : null;
-      return `<div class="htiles">${HANDY_CATS.map(c => `<a class="htile" href="${esc(at ? exactUrl(c[3], at) : placeUrl(info))}" target="_blank" rel="noopener"${at ? '' : ` data-word="${esc(c[3])}"`}>${icon(c[2])}<span>${c[1]}</span></a>`).join('')}</div>
-      <p class="attr hnote">${at ? `Searches right around ${esc(p.name)}${ios ? ' in Apple Maps' : ''}.` : `Opens ${esc(p.name)} in Google Maps and copies the word. Paste it into the search box there.`}</p>`;
-    };
-    const show_ = info => {
-      $('#handyNear').innerHTML = `<span>${info.lat != null ? "Searching around" : "Opens"}: ${esc(info.text)}</span> · <button type="button" class="hlink" id="hWrong">Change</button>`;
-      $('#hWrong').onclick = () => openHandyLink(p);
-      box.innerHTML = sosHtml(info.cc) + tiles(info) + foot(); wire();
-      box.querySelectorAll('.htile[data-word]').forEach(a => a.addEventListener('click', () => {
-        const w = a.dataset.word;
-        try { navigator.clipboard?.writeText(w); } catch (e) {}
-        toast(`“${w}” copied. Paste it into Google Maps search`);
-      }));
-    };
-    const b0 = p.stay || p.src || p, quick = b0.geo || (b0.address && !b0.maps ? { text: [b0.name, b0.address].filter(Boolean).join(', '), cc: guessCC(b0.address) } : null);
-    if (quick) show_(quick); else { $('#handyNear').innerHTML = '<span class="hwait">Reading the map link…</span>'; box.innerHTML = sosHtml(guessCC(`${p.address} ${p.name}`)); }
-    const info = await locate(p);
-    if (!live()) return;
-    if (!info) {
-      $('#handyNear').innerHTML = '';
-      box.innerHTML = sosHtml(guessCC(`${p.address} ${p.name}`)) + `<div class="hcard hask"><p><b>We need to know where ${esc(p.name)} is.</b></p><button type="button" class="btn primary" id="hAsk">Paste a map link or coordinates</button></div>` + foot();
-      return wire();
-    }
-    show_(info);
-  }
-  // One drawer for "Add place" (p = null) and "Wrong place?" (p = the place to fix),
-  // the same as an itinerary item's location: search a place, or paste a link instead
-  let linkFor = null;
-  function openHandyLink(p) {
-    linkFor = p;
-    $('#hlTitle').textContent = p ? `Where is ${p.name}?` : 'Add a place';
-    $('#hlSub').textContent = p ? 'Search for it, or paste a map link. It will be used from now on.' : 'Your Airbnb, a friend’s place, or anywhere you’ll be based.';
-    $('#hlQ').value = p ? p.name : ''; $('#hlResults').innerHTML = '';
-    $('#hlUrl').value = ''; $('#hlName').value = ''; $('#hlErr').hidden = true;
-    $('#hlForm').hidden = true; $('#hlSearch').hidden = false; $('#hlShowLink').hidden = false;
-    show('#handyAddDrawer');
-    if (p) searchPlaces($('#hlQ').value, $('#hlResults'), pickHandy, hlScope()); else setTimeout(() => $('#hlQ').focus(), 250);
-  }
-  // fixing a stay: only show places in its country
-  const CC_NAME = { vn: 'Vietnam', fr: 'France', my: 'Malaysia', sg: 'Singapore', th: 'Thailand', id: 'Indonesia', jp: 'Japan', kr: 'South Korea', ph: 'the Philippines', kh: 'Cambodia', au: 'Australia', gb: 'the UK', us: 'the US' };
-  function hlScope() {
-    if (!linkFor) return {};
-    const cc = guessCC(`${linkFor.address || ''} ${linkFor.name || ''}`);
-    return cc ? { cc, country: CC_NAME[cc] } : {};
-  }
-  let hlTimer;
-  $('#hlQ').addEventListener('input', () => { clearTimeout(hlTimer); hlTimer = setTimeout(() => searchPlaces($('#hlQ').value.trim(), $('#hlResults'), pickHandy, hlScope()), 350); });
-  $('#hlShowLink').onclick = () => { $('#hlForm').hidden = false; $('#hlShowLink').hidden = true; $('#hlNameRow').hidden = !!linkFor; setTimeout(() => $('#hlUrl').focus(), 50); };
-  // saving a place's position: on the stay (and its booking's map link) or on the added place
-  // saving where a place is, on the stay (and its booking's map link) or on the added place
-  async function placeAt(at, url, name, label, cc, text) {
-    if (linkFor) {
-      const target = linkFor.stay || linkFor.src;
-      target.maps = url || gmaps(at); delete target.geo;
-      if (text) target.linkText = text; else delete target.linkText;
-      if (linkFor.manual) { Object.assign(target, at); target.cc = cc || ''; target.text = text || ''; }
-      save(); hide(); renderHandy(); if (!linkFor.manual) renderBookings(); toast('Location saved');
-      return;
-    }
-    const id = uid();
-    (trip.handy ||= []).push({ id, name: name || 'My place', address: label || '', maps: url || '', ...(at || {}), cc: cc || '', text: text || '' });
-    handyCur = id; save(); hide(); renderHandy();
-  }
-  function pickHandy(pl) { placeAt({ lat: pl.lat, lon: pl.lon }, '', pl.name, pl.address, pl.cc, [pl.name, pl.address].filter(Boolean).join(', ')); }
-  $('#hlForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    const raw = $('#hlUrl').value.trim(), name = $('#hlName').value.trim(), err = $('#hlErr');
-    if (!raw) { err.textContent = 'Paste a map link first.'; err.hidden = false; return; }
-    const url = /[a-z]/i.test(raw) ? normaliseUrl(raw) : '';   // plain coordinates have no link
-    const btn = $('#hlForm button[type=submit]'); btn.disabled = true; btn.textContent = 'Opening link…';
-    const link = coordsFromLink(raw) ? { at: coordsFromLink(raw), text: '' } : await resolveLink(url);
-    btn.disabled = false; btn.textContent = 'Save';
-    if (link.at) { const r = await reverseCC(link.at); return placeAt(link.at, url || gmaps(link.at), name || link.text.split(',')[0] || r.label?.split(',')[0], r.label, r.cc, [link.text, r.label].filter(Boolean).join(', ')); }
-    if (!link.text) { err.textContent = 'Couldn’t read a location from that link. Try again, or paste coordinates (press and hold on the place in Google Maps, then copy the numbers at the top).'; err.hidden = false; return; }
-    // a share link: Google's own name and address for the place
-    if (linkFor) {
-      const target = linkFor.stay || linkFor.src; target.maps = url; delete target.geo; target.linkText = link.text;
-      if (linkFor.manual) { delete target.lat; delete target.lon; target.text = link.text; target.address = target.address || link.text; }
-      save(); hide(); renderHandy(); if (!linkFor.manual) renderBookings(); toast('Location saved');
-      return;
-    }
-    const id = uid(), nm = name || link.text.split(',')[0];
-    (trip.handy ||= []).push({ id, name: nm, address: link.text.split(',').slice(1).join(',').trim(), maps: url, text: link.text, cc: guessCC(link.text) });
-    handyCur = id; save(); hide(); renderHandy();
-  });
+  // give Android a moment to offer its own install prompt first
+  setTimeout(() => { if (!document.querySelector('.drawer.on')) installPrompt(); }, 1800);
 
   /* ---------- routing ---------- */
-  const VIEWS = ['trips', 'itinerary', 'bookings', 'packing', 'handy'];
+  const VIEWS = ['trips', 'itinerary', 'bookings', 'packing'];
   function currentView() { const h = location.hash.slice(1); return VIEWS.includes(h) ? h : 'trips'; }
   let lastView = null;
   function route() {
@@ -1598,7 +1411,6 @@
     if (v === 'packing') renderPacking();
     if (v === 'bookings') renderBookings();
     $('#bookFab').hidden = v !== 'bookings';
-    if (v === 'handy') renderHandy();
     if (v === 'itinerary' && lastView !== 'itinerary') { renderDays(); renderGrid(); requestAnimationFrame(scrollToStart); }
     if (v !== 'itinerary') { scrollTo(0, 0); $('#holdTip')?.remove(); }
     lastView = v;

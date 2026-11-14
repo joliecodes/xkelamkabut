@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2a8c95">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="xkelamkabut">
 <title>xkelamkabut</title>
 <link rel="manifest" href="manifest.json">
@@ -36,6 +37,9 @@
     <symbol id="i-cart" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></symbol>
     <symbol id="i-shirt" viewBox="0 0 24 24"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></symbol>
     <symbol id="i-fuel" viewBox="0 0 24 24"><line x1="3" x2="15" y1="22" y2="22"/><line x1="4" x2="14" y1="9" y2="9"/><path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 2v13"/><path d="m16 6-4-4-4 4"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></symbol>
+    <symbol id="i-addsq" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></symbol>
+    <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
     <symbol id="i-other" viewBox="0 0 24 24"><path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.13-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.13a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.13 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.13a.5.5 0 0 1-.96 0z"/><path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/></symbol>
     <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 6h.01M3 12h.01M3 18h.01M8 6h13M8 12h13M8 18h13"/></symbol>
@@ -104,14 +108,6 @@
     </div>
     <div id="packList"></div>
   </section>
-
-  <section class="view" id="v-handy">
-    <div class="tripsbar"><h2 class="sect">Handy</h2></div>
-    <p class="muted hsub">Find what you need around where you're staying.</p>
-    <div class="days filt htabs" id="handyTabs"></div>
-    <div class="hnear" id="handyNear"></div>
-    <div id="handyBody"></div>
-  </section>
 </main>
 
 <button type="button" class="fab" id="bookFab" aria-label="Add booking" hidden><svg class="ico"><use href="#i-plus"/></svg></button>
@@ -120,26 +116,15 @@
   <a href="#itinerary" data-v="itinerary" class="on"><svg class="ico"><use href="#i-calendar"/></svg>Itinerary</a>
   <a href="#bookings" data-v="bookings"><svg class="ico"><use href="#i-plane"/></svg>Bookings</a>
   <a href="#packing" data-v="packing"><svg class="ico"><use href="#i-bag"/></svg>Packing</a>
-  <a href="#handy" data-v="handy"><svg class="ico"><use href="#i-handy"/></svg>Handy</a>
 </nav>
 
-<!-- Handy: add a place, or fix where a place is, with a map link -->
-<div class="drawer" id="handyAddDrawer" role="dialog" aria-modal="true">
+<!-- Add to Home Screen -->
+<div class="drawer install" id="installSheet" role="dialog" aria-modal="true" aria-labelledby="inTitle">
   <div class="grab"></div>
-  <div class="viewhead"><div class="vt"><div class="vtype">Handy</div><h3 id="hlTitle">Add a place</h3></div>
-    <button type="button" class="round" data-close aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button></div>
-  <p class="muted" id="hlSub" style="margin:0 0 12px"></p>
-  <div id="hlSearch">
-    <input id="hlQ" type="search" placeholder="Search a place, e.g. Sunday Boutique Phu Quoc" autocomplete="off" enterkeyhint="search">
-    <div class="results" id="hlResults"></div>
-  </div>
-  <button type="button" class="linkbtn" id="hlShowLink"><svg class="ico"><use href="#i-link"/></svg>Paste A Link Instead</button>
-  <form id="hlForm" novalidate hidden>
-    <label>Map link<input id="hlUrl" type="text" inputmode="url" placeholder="Location map link" autocomplete="off"></label>
-    <label id="hlNameRow">Name<input id="hlName" placeholder="e.g. Cauterets BNB" autocomplete="off"></label>
-    <p class="err" id="hlErr" hidden></p>
-    <button type="submit" class="btn primary wide">Save</button>
-  </form>
+  <button type="button" class="round inclose" data-close aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
+  <div class="inhead"><img src="icons/icon-192.png" alt="" width="64" height="64"><div><h3 id="inTitle">Add xkelamkabut to your Home Screen</h3><p class="muted">Opens like an app, full screen, and works offline.</p></div></div>
+  <div id="inBody"></div>
+  <button type="button" class="linkbtn innot" id="inLater">Not now</button>
 </div>
 
 <!-- Drawer -->

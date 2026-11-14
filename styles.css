@@ -477,3 +477,17 @@ form input.warn{border-color:#e0a03a;background:#fff4df}
 .htile .ico{width:22px;height:22px;color:var(--sea);background:#eef5f5;border-radius:10px;padding:8px;box-sizing:content-box}
 .htile:active{transform:scale(.98)}
 .hnote{font-size:12px;color:var(--muted);margin:10px 4px 0}
+/* Add to Home Screen */
+.drawer.install{padding-top:8px}
+.install .inclose{position:absolute;right:16px;top:16px}
+.inhead{display:flex;gap:14px;align-items:center;margin:8px 44px 16px 0}
+.inhead img{border-radius:16px;box-shadow:0 4px 14px rgba(36,50,58,.15);flex:none}
+.inhead h3{margin:0 0 4px;font-size:19px;line-height:1.25}
+.inhead p{margin:0;font-size:14px}
+.insteps{list-style:none;margin:0 0 6px;padding:0;display:flex;flex-direction:column;gap:10px}
+.insteps li{display:flex;align-items:center;gap:12px;background:#f6f3ee;border-radius:14px;padding:12px 14px;font-size:15px;line-height:1.35}
+.insteps .n{flex:none;width:26px;height:26px;border-radius:50%;background:var(--sea);color:#fff;font-weight:700;font-size:13px;display:grid;place-items:center}
+.insteps .ico{width:18px;height:18px;vertical-align:-3px;color:var(--sea)}
+.install .btn.wide{width:100%;margin:4px 0 12px}
+.inapp p{margin:0 0 12px;font-size:15px;line-height:1.4}
+.innot{display:block;margin:10px auto 4px;color:var(--muted)}
